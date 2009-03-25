@@ -1,7 +1,7 @@
 #!/usr/bin/python
 #
 #  yarrow - (yet another retro reverse-ordered website?)
-#  v0.1
+#  v0.20
 #
 # Copyright (c) 2002 Thomas Thurman
 # thomas@thurman.org.uk
@@ -28,24 +28,51 @@ import os
 import string
 import Cookie
 import sys
+import re
+import config
+
+if os.environ.has_key('SCRIPT_NAME'):
+	prefix = os.environ['SCRIPT_NAME'] + '/'
+else:
+	prefix = '/'
 
 def unentity(text):
-	# Should also pick up email addresses and URLs and linkify them.
+	"Replaces the three characters which are unsafe in HTML with their corresponding entities."
 	text = string.replace(text, '&', '&amp;')
 	text = string.replace(text, '<', '&lt;')
 	text = string.replace(text, '>', '&gt;')
 	return text
 
-def html_print(message, grogname, author, time, reformat):
+def linkify(text, item_prefix = None):
+	"Adds hyperlinks to |text|. If you use this with unentity, call unentity first. |item_prefix| is what to add to GROGGS itemids; leave this as None if you don't want to linkify them."
+	temp = re.sub('(http:[A-Za-z0-9_+~#/?=%.-]*)', r'<a href="\1">\1</a>', text)
+	temp = re.sub('(ftp:[A-Za-z0-9_+~#/?=%.-]*)', r'<a href="\1">\1</a>', temp)
+	temp = re.sub('(gopher:[A-Za-z0-9_+~#/?=%.-]*)', r'<a href="\1">\1</a>', temp)
+	temp = re.sub('([A-Za-z0-9._+-]*@[A-Za-z0-9._+]*)', r'<a href="mailto:\1">\1</a>', temp)
+	if item_prefix:
+		temp = re.sub(r'\b([A-Za-z]\d{7})\b', r'<a href="'+item_prefix+r'/\1">\1</a>', temp)
+	# I was considering allowing www.anything to be an http link, but that starts
+	# interfering with the text when it's already in a link. Odd that links can't
+	# nest, isn't it?
+	return temp
+
+def html_print(message, grogname, author, time, reformat, item_prefix=''):
+	"Prints one of the sections of an item which contains one reply and the banner across the top."
+	# First: the banner across the top...
+
 	print '<table class="reply" width="100%"><tr><th rowspan="2">'
+	# We don't linkify the grogname, because it's often just an email address.
 	print unentity(grogname)
 	print '</th><td>'
 	print unentity(author)
 	print '</td></tr><tr><td>'
 	print unentity(time)
 	print '</td></tr></table>'
+
+	# And now for some real content.
+
 	for line in message:
-		print unentity(line)
+		print linkify(unentity(line), item_prefix)
 		if reformat:
 			if line=='':
 				print '<br><br>'
@@ -53,9 +80,11 @@ def html_print(message, grogname, author, time, reformat):
 				# just a guess, but...
 				print '<br>'
 		else:
+			# We're not reformatting, so just break at the ends of lines.
 			print '<br>'
 
 def all_known_servers():
+	"Returns a list of all known servers. At present, each one is a 4-tuple: name, host, port, description."
 	result = []
 	list = open("servers.dat")
 	while 1:
@@ -63,20 +92,15 @@ def all_known_servers():
 		if not stuff:
                 	break
 		result.append(string.split(stuff, None, 3))
+	list.close()
 	return result
 
-def safeint(x, default):
-	if x=='' or x==None:
-		return default
-	else:
-		return int(x)
-
 class yarrow:
+	"A CGI interface for RGTP."
 
 	form = cgi.FieldStorage()
 	current_time = time.localtime(time.time())
 	title = 'Reverse Gossip'
-	our_prefix = '/gossip/'
 	server = ''
 	verb = ''
 	user = ''
@@ -106,7 +130,7 @@ class yarrow:
 		return result
 
 	def choose_a_server(self):
-		print '<P>This is still being built. Don\'t expect anything to work.</P>'
+		print '<p>This is still being built. Don\'t expect anything to work.</p>'
 		print '<h1>First off, choose yourself a server.</h1>'
 
 		print '<table width="100%">'
@@ -122,7 +146,7 @@ class yarrow:
 				listed_port = ':'+stuff[2]
 
 			print '<tr>'
-			print '<td><a href="'+self.our_prefix+stuff[0]+'">'+stuff[0]+'</a></td>'
+			print '<td><a href="'+prefix+stuff[0]+'">'+stuff[0]+'</a></td>'
 			print '<td>'+stuff[3]+'</td>'
 			print '<td><i>rgtp://'+stuff[1]+listed_port+'</i></td>'
 			print '</tr>'
@@ -140,10 +164,10 @@ class yarrow:
 		print '<h1>' + self.server + ' login</h1>'
 		print '<UL>'
 
-		print '<LI><a href="'+self.our_prefix+self.server+'/motd/">Tell me more</a> about '+self.server+'.</LI>'
-		print '<LI>I have an account on ' + self.server + ' already: <FORM ACTION="'+self.our_prefix+self.server+'/browse/" METHOD="POST"><table border align="center"><tr><td>My email address is</td><td><INPUT TYPE="text" NAME="user"></td></tr><tr><td>and my shared secret is</td><td><INPUT TYPE="password" NAME="password"></td></tr><tr><td>Remember my login<br>(does nothing atm)</td><td><INPUT TYPE="checkbox" CHECKED NAME="remember"></td></tr><tr><td colspan="2" align="right"><INPUT TYPE="submit" VALUE=" OK "></td></tr></table></FORM></LI>'
-		print '<LI><A HREF="'+self.our_prefix+self.server+'/browse/">I\'d just like to browse</A>. (But that depends whether the server allows guest access.)</LI>'
-		print '<LI><A HREF="'+self.our_prefix+self.server+'/newbie/">I\'d like to create a new account</A>. (But this is broken at the moment.)</LI>'
+		print '<LI><a href="'+prefix+self.server+'/motd/">Tell me more</a> about '+self.server+'.</LI>'
+		print '<LI>I have an account on ' + self.server + ' already: <FORM ACTION="'+prefix+self.server+'/browse/" METHOD="POST"><table border align="center"><tr><td>My email address is</td><td><INPUT TYPE="text" NAME="user"></td></tr><tr><td>and my shared secret is</td><td><INPUT TYPE="password" NAME="password"></td></tr><tr><td>Remember my login<br>(does nothing atm)</td><td><INPUT TYPE="checkbox" CHECKED NAME="remember"></td></tr><tr><td colspan="2" align="right"><INPUT TYPE="submit" VALUE=" OK "></td></tr></table></FORM></LI>'
+		print '<LI><A HREF="'+prefix+self.server+'/browse/">I\'d just like to browse</A>. (But that depends whether the server allows guest access.)</LI>'
+		print '<LI><A HREF="'+prefix+self.server+'/newbie/">I\'d like to create a new account</A>.</LI>'
 		print '</UL>'
 
 	def logout(self):
@@ -170,29 +194,36 @@ class yarrow:
 		for k in keys:
 			line = index[k]
 			print '<tr>'
-			print '<td class="time">'+self.neat_date(line['date'])+'</td>'
+			print '<td>'+self.neat_date(line['date'])+'</td>'
 			print '<td><i>' + str(line['count']) + '</i></td>'
-			print '<td class="by">'+line['from']+'</td>'
+			print '<td>'
+			if line['live']:
+				print line['from']
+			else:
+				# Don't show "most recently by" on
+				# posts that have been continued.
+				print '<i>-- continued above</i>'
+			print '</td>'
 			print '<td class="subject">'
 			if self.usenc:
 				nc = '?nc=' + str(line['count'])
 			else:
 				nc = ''
-			print '<a href="'+self.our_prefix+self.server+'/'+k+'/'+nc+'">'
+			print '<a href="'+prefix+self.server+'/'+k+'/'+nc+'">'
 			if not line['live']: print '<i>'
 			print line['subject']
 			if not line['live']: print '</i>'
 			print '</a></td></tr>'
 		print '<tr><td colspan="3" align="center">('
-		print '<a href="'+self.our_prefix+self.server+'/post/">'
+		print '<a href="'+prefix+self.server+'/post/">'
 		print 'Post a new message</a> )</td></tr>'
 		print '</table>'
 	
 	def serverlink(self, name, title):
-		print '<a href="'+self.our_prefix+self.server+'/'+name+'/">'+title+'</a><br>'
+		print '<a href="'+prefix+self.server+'/'+name+'/">'+title+'</a><br>'
 	
 	def motd(self):
-		html_print(self.connection.motd()[1:], self.server+' message of the day', '', '', self.reformat)
+		html_print(self.connection.motd()[1:], self.server+' message of the day', '', '', self.reformat, prefix+self.server)
 
 	def show_posting_box(self, sequence=None, show_subject=1, textblock=None):
 		if self.item=='':
@@ -200,7 +231,7 @@ class yarrow:
 		else:
 			item_link = '/' + self.item
 
-		print '<form action="'+self.our_prefix+self.server+item_link+'/post" method="post">'
+		print '<form action="'+prefix+self.server+item_link+'/post" method="post">'
 		print 'From <input type="text" name="from" value="'+self.grogname+'" style="width: 99%"><br>'
 		if show_subject:
 			print 'Subject <input type="text" name="subject" value="" style="width: 99%"><br>'
@@ -250,7 +281,7 @@ class yarrow:
 				print '<p>Sorry, someone posted a reply in the time between'
 				print 'when you read the item and when you submitted your'
 				print 'reply. I suggest you go and read'
-				print '<a href="'+self.our_prefix+self.server+'/'+item+'">what\'s'
+				print '<a href="'+prefix+self.server+'/'+item+'">what\'s'
 				print 'changed</a> before you reply again.</p>'
 				# Tell them what they said. IE has a nasty habit of
 				# eating the contents of forms if you go back to them.
@@ -267,7 +298,7 @@ class yarrow:
 			else:
 				print '<h1>Added comment</h1>'
 				print 'Your comment was added. You can view it'
-				print '<a href="'+self.our_prefix+self.server+'/'+submission_status+'/">'
+				print '<a href="'+prefix+self.server+'/'+submission_status+'/">'
 				print 'here</a>.'
 		else:
 			print '<h1>Post a new item</h1>'
@@ -289,7 +320,7 @@ class yarrow:
 
 		print '<h1>Your profile</h1>'
 
-		print '<form action="'+self.our_prefix+self.server+'/profile" method="post">'
+		print '<form action="'+prefix+self.server+'/profile" method="post">'
 		if self.grogname!='':
 			example_name = self.grogname
 		else:
@@ -328,7 +359,8 @@ class yarrow:
 		print '<h2>Logging</h2>'
 		radio(self, 'log', 1)
 		print 'Show what messages were passed between us and the RGTP server'
-		print 'to generate each page.<br>'
+		print 'to generate each page. Note that this can make the index'
+		print 'take impractically long to load.<br>'
 		radio(self, 'log', 0)
 		print 'Don\'t. (Unless you\'re hugely interested in'
 		print '<a href="http://www.groggs.group.cam.ac.uk/protocol.txt">RGTP'
@@ -341,17 +373,34 @@ class yarrow:
 		print '<h1>New ' + self.server + ' account</h1>'
 
 		if self.form.has_key('newbie'):
-			print self.connection.request_account(self.form['newbie'].value)
+			# We have a name. Try to create an account with that name.
+			result = self.connection.request_account(self.form['newbie'].value)
+
+			if result[0]:
+				print '<h2>Success!</h2>'
+			else:
+				print '<h2>Account creation failed</h2>'
+			print '<p><i>' + result[1] + '</i></p>'
+			if result[0]:
+				print '<p>Check your email for a message from the'
+				print self.server + ' server.</p>'
+			print '<p>If you\'d like to contact a human to'
+			print 'discuss this, the Editors\' email addresses are usually'
+			print 'listed in <a href="'+prefix+self.server+'/motd/">the'
+			print 'server\'s message of the day</a>.</p>'
 		else:
-			warning = self.connection.request_account('')
-			print '<table align="center"><tr><td><img src="/exclamation" width="36" height="35" alt="/!\"></td><td>'
+			# they haven't given us a username. So we give them a form
+			# to fill in. Firstly, get the warning text, by doing an
+			# account request and then bailing before we give them a
+			# name.
+			warning = self.connection.request_account(None)
+			print '<table align="center"><tr><td><img src="/exclamation" width="36" height="35" alt="/!\\"></td><td>'
 			print '<b>Please read this before continuing:</b><br><br>'
 			for line in warning:
 				print unentity(line) + '<br>'
-			print '</td></tr><tr><td colspan="2">'
-			print '<FORM ACTION="." METHOD="POST"><INPUT TYPE="text" NAME="newbie"><INPUT TYPE="submit" VALUE=" Apply "></FORM>'
+			print '</td></tr><tr><td colspan="2" align="right">'
+			print '<FORM ACTION="'+prefix+self.server+'/newbie/" METHOD="POST"><INPUT TYPE="text" NAME="newbie"> <INPUT TYPE="submit" VALUE=" Apply "></FORM>'
 			print '</td></tr></table>'
-			print '<b>Note: This doesn\'t work at the moment.</b> You\'ll have to use <a href="/">a different RGTP client</a> to register.'
 	
 	def connect(self):
 		if self.server!='':
@@ -381,16 +430,16 @@ class yarrow:
 		if self.server!='':
 			print '<b>this is:</b> ' + self.server + '<br>'
 
-		print '<b>you are:</b> '
-		if self.user=='':
-			print '<i>guest</i><br>'
-		else:
-			print self.user + '<br>'
+			print '<b>you are:</b> '
+			if self.user=='':
+				print '<i>guest</i><br>'
+			else:
+				print self.user + '<br>'
 
 		if self.grogname!='':
 			print '<b>grogname:</b> '+self.grogname+'<br>'
 
-		print '<b>client:</b> yarrow 0.1'
+		print '<b>client:</b> <a href="http://rgtp.thurman.org.uk/yarrow/">yarrow</a> 0.20'
 
 		print '</div>'
 
@@ -404,8 +453,8 @@ class yarrow:
 			self.serverlink('motd','Status')
 			self.serverlink('profile','Profile')
 		print '<br><br>'
-		print '<a href="'+self.our_prefix+'">Servers</a><br><br>'
-		print '<a href="'+self.our_prefix+'yarrow-faq/browse/">Help</a><br><br>'
+		print '<a href="'+prefix+'">Servers</a><br><br>'
+		print '<a href="'+prefix+'yarrow-faq/browse/">Help</a><br><br>'
 		print '<a href="http://validator.w3.org/check/referer">Valid&nbsp;HTML</a><br>'
 		print '<a href="http://jigsaw.w3.org/css-validator/check/referer">Valid&nbsp;CSS</a><br>'
 		print '</div>'
@@ -438,7 +487,7 @@ class yarrow:
 	def clear_cookie(self, key):
 		name = self.cookiename(key)
 		self.outgoing_cookies[name] = ""
-		self.outgoing_cookies[name]["path"] = self.our_prefix + self.server
+		self.outgoing_cookies[name]["path"] = prefix + self.server
 		self.outgoing_cookies[name]["expires"] = -500000
 
 	def harvest_with_cookies(self, key):
@@ -463,7 +512,7 @@ class yarrow:
 			# Also, tell the client about it so we can
 			# use the value again later.
 			self.outgoing_cookies[name] = value
-			self.outgoing_cookies[name]['path'] = self.our_prefix + self.server
+			self.outgoing_cookies[name]['path'] = prefix + self.server
 			self.outgoing_cookies[name]['expires'] = 500000
 			self.outgoing_cookies[name]['version'] = 1
 			return value
@@ -502,6 +551,13 @@ class yarrow:
 
 		# Hmm, defaults...
 	
+		def safeint(x, default):
+			"Turn a string into an integer, or return a default value if we can't."
+			if x=='' or x==None:
+				return default
+			else:
+				return int(x)
+
 		if self.verb=='':
 			if self.item=='':
 				self.verb = 'login'
@@ -553,25 +609,25 @@ class yarrow:
 			print 'and (for the sake of rhyming verse)<br>'
 			print 'it turned into a wombat.</p>'
 		elif self.verb=='read':
-			def possibly_link(self, prefix, key):
+			def possibly_link(self, title, key):
 				"If we have a continuation in direction 'key', prints a link to it."
 				target = self.this_status[key]
 				if target:
 					name = self.connection.stat(target)['subject']
-					print '<p><i>(' + prefix
-					print '<a href="' + self.our_prefix + self.server + '/' + target + '">' + name + '</a>)</i></p>'
-			print '<h1>' + self.title + '</h1>'
+					print '<p><i>(' + title
+					print '<a href="' + prefix + self.server + '/' + target + '">' + name + '</a>)</i></p>'
+			print '<h1>' + linkify(unentity(self.title), prefix+self.server) + '</h1>'
 
 			possibly_link(self, 'Continued from', 'from')
 			for i in self.this_item[2:]:
-				html_print(i[3], i[0], i[1], i[2], self.reformat)
+				html_print(i[3], i[0], i[1], i[2], self.reformat, prefix+self.server)
 			possibly_link(self, 'Continued in', 'to')
 
 			if self.connection.access_level > 1 and self.this_status['to']==None:
 				print '<hr>'
 				self.show_posting_box(self.this_status['replied'], 0)
 
-			print '<hr><i>(Return to <a href="' + self.our_prefix + self.server + '/browse/">the ' + self.server + ' index</a>)</i></p>'
+			print '<hr><i>(Return to <a href="' + prefix + self.server + '/browse/">the ' + self.server + ' index</a>)</i></p>'
 		elif self.verb=='motd':
 			self.motd()
 		elif self.verb=='newbie':

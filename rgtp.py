@@ -59,15 +59,15 @@ class response:
 
 	def maybe_panic(self):
 		if self.numeric==481:
-			raise RGTPException("Timeout.")
+			raise RGTPException("Timeout: "+self.textual)
 		elif self.numeric==484 or self.numeric==-999:
 			raise RGTPException("Server internal error: "+self.textual)
 		elif self.numeric==500 or self.numeric==510 or self.numeric==511 or self.numeric==512 or self.numeric==582:
-			raise RGTPException("Broken client.")
+			raise RGTPException("Broken client: "+self.textual)
 		elif self.numeric==484:
-			raise RGTPException("Server internal error.")
+			raise RGTPException("Server internal error: "+self.textual)
 		elif self.numeric==530 or self.numeric==531:
-			raise RGTPException("Permission denied. (Try logging in with a privileged account?)")
+			raise RGTPException("Permission denied. (Try logging in with a privileged account?): "+self.textual)
 
 	def code(self):
 		return self.numeric
@@ -114,6 +114,7 @@ class multiline(callback):
 
 class stomach(multiline):
 	def __init__(self):
+		multiline.__init__(self)
 		self.stuff = []
 
 	def __call__(self,message):
@@ -251,23 +252,27 @@ class fancy:
 	def request_account(self, email):
 		class regu_handler(stomach):
 
+			def __init__(self):
+				stomach.__init__(self)
+
 			def __call__(self, message):
 				if message.code()==100:
 					pass # probably best to ignore this
-				elif message.code()==482:
-					raise RGTPException("Permission denied to create account: " + message.text())
+				elif message.code()==482 or message.code()==280:
+					successful = message.code()==280
+					self.answer = (successful, message.text())
 				elif message.code()==250:
 					pass # good, that's what we want
-				elif message.code()==280:
-					self.stuff.append(message.text())
 				elif message.text()=='' or message.text()[0]==' ':
 					self.eat(response(message.text()[1:], message.code()))
 
 		towel = regu_handler()
 		self.base.send("REGU", towel)
-		if email!='':
+		if email!=None:
 			self.base.send("USER "+email, towel)
-		return towel.stuff
+			return towel.answer
+		else:
+			return towel.stuff
 
 	def motd(self):
 		towel = stomach()
