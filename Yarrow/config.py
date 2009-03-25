@@ -27,7 +27,7 @@ import os.path
 # The line below beginning "baseconf" is modified by the installation script
 # to point at your base config file for yarrow. If you need to put that
 # somewhere else, modify this line yourself.
-baseconf = '/etc/yarrow.conf'
+baseconf = '/home/xf/marnanel/proj/yarrow/yarrow.conf'
 
 settings = ConfigParser.ConfigParser()
 settings.read(baseconf)

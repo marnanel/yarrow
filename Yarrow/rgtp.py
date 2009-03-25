@@ -298,7 +298,7 @@ class fancy:
 					self.base.send("AUTH "+self.hash.hexdigest()+" "+self.clientnonce, self)
 				elif message.code()==133:
 					pass # ummm...
-				elif message.code()==483:
+				elif message.code() in [482, 483]:
 					raise RGTPException("Authentication failed ("+message.text()+")")
 				elif message.code()==130:
 					pass # ignore this
@@ -334,8 +334,11 @@ class fancy:
 		towel = regu_handler()
 		self.base.send("REGU", towel)
 		if email!=None:
-			self.base.send("USER "+email, towel)
-			return towel.answer
+			try:
+				self.base.send("USER "+email, towel)
+				return towel.answer
+			except RGTPServerException, rse:
+				return (0, str(rse))
 		else:
 			return towel.stuff
 
@@ -756,7 +759,7 @@ class interpreted_index:
 
 	def __init__(self):
 		self.index = {}
-		self.last_sequences = { 'all': 0 }
+		self.last_sequences = { 'all': -1 }
 		self.version = 1
 		self.c_line = None
 
@@ -773,7 +776,7 @@ class interpreted_index:
 							       'count': 0,
 							       'subject': 'Unknown',
 							       'live': 1 }
-					self.last_sequences[line[2]] = 0
+					self.last_sequences[line[2]] = -1
 
 				if line[4]!='F' and sequence > self.last_sequences[line[2]]:
 					self.last_sequences[line[2]] = sequence
@@ -785,13 +788,8 @@ class interpreted_index:
 					self.index[line[2]]['date'] = int(line[1],16)
 					self.index[line[2]]['from'] = line[3]
 
-
-
 				if line[4]!='F' and sequence > self.last_sequences[line[2]]:
 					self.last_sequences[line[2]] = sequence
-
-				if line[4] in ['I','C']:
-					self.index[line[2]]['subject'] = line[5]
 
 				if line[4]=='C':
 				    self.c_line = line
@@ -816,3 +814,13 @@ class interpreted_index:
 
 	def sequences(self):
 		return self.last_sequences
+
+	def keys(self):
+		def compare_dates(left, right, I = self.index):
+			return cmp(I[left]['date'], I[right]['date'])
+
+		temp = self.index.keys()
+		temp.sort(compare_dates)
+		temp.reverse()
+
+		return temp

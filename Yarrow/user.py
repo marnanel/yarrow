@@ -20,7 +20,6 @@
 import shelve
 import md5
 import common
-import smtplib
 import config
 
 users_file = config.backing_store_path('users')
@@ -51,6 +50,13 @@ class user:
 			self.metadata[server] = {}
 
 		self.metadata[server][field] = value
+
+	def clear_state(self, server, field):
+		if not self.metadata.has_key(server):
+			self.metadata[server] = {}
+
+		if self.metadata[server].has_key(field):
+			del self.metadata[server][field]
 
 	def state(self, server, field, default):
 		if self.metadata.has_key(server) and \
@@ -89,29 +95,6 @@ class user:
 
 	def set_password(self, new_password):
 		self.password = hash_of(new_password)
-
-	def invent_new_password(self):
-		"Sets the password to something random, and notifies the user. (Be sure to save after calling this, or the user will get confused.)"
-
-		the_password = common.random_hex_string(8) # not the MD5 hash!
-		self.set_password(the_password)
-
-		sent_from = config.value('general','mail-from')
-		sent_to = self.username
-
-		message = ("From: %s\r\nTo: %s\r\n\
-Subject: yarrow password\r\n\
-Delivered-By-The-Graces-Of: yarrow\r\n\r\n\
-You have requested a new password on the yarrow server. \
-It has been reset to %s.\r\n\r\n\
-Thank you for using yarrow.\r\n" % \
-			(sent_from,
-			sent_to,
-			the_password))
-
-		mail = smtplib.SMTP('localhost')
-		mail.sendmail(sent_from, sent_to, message)
-		mail.quit()
 
 class visitor(user):
 	"Represents a casual user of the system whose name we don't know."
@@ -160,14 +143,13 @@ def from_session_key(key):
 	else:
 		return None
 
-def create(username):
-	"Creates a new user with username |username| and a random password. It must not already exist. Writes it out to persistant storage, notifies the user by email, and returns the newly-created user."
+def create(username, password):
+	"""Creates a new user with username |username| and password |password|.
+It must not already exist. Writes it out to persistant storage and
+returns the newly-created user."""
 
 	result = user(username)
-	result.save(1) # so we're sure we can actually save
-	# (hmm, is it worth saving twice just to check this, when
-	# we have to get mutex and everything?) 
-	result.invent_new_password()
-	result.save()
+	result.set_password(password)
+	result.save(1)
 
 	return result
