@@ -1,0 +1,379 @@
+#!/usr/bin/python
+
+import cgi
+import rgtp
+import time
+import os
+import string
+import Cookie
+import sys
+
+def unentity(text):
+	# Should also pick up email addresses and URLs and linkify them.
+	text = string.replace(text, '&', '&amp;')
+	text = string.replace(text, '<', '&lt;')
+	text = string.replace(text, '>', '&gt;')
+	return text
+
+def html_print(message, authors, time):
+	print '<table cellspacing="0" cellpadding="0" border="0" width="100%"><tr><th rowspan="2" width="15">&nbsp;</th><th align="right" height="10">'
+	print unentity(time)
+	print '&nbsp;</td></tr><tr><td><i>'
+	print unentity(authors)
+	print '</i>&nbsp;</td></tr></table>'
+	for line in message:
+		print unentity(line) + '<br>'
+
+def read_with_chomping(file):
+	temp = file.readline()
+	if temp!='' and temp[-1]=='\n':
+		temp=temp[:-1]
+	return temp
+
+class yarrow:
+
+	form = cgi.FieldStorage()
+	current_time = time.localtime(time.time())
+	title = 'Reverse Gossip'
+	our_prefix = '/gossip/'
+	server = ''
+	verb = ''
+	user = ''
+	password = ''
+	if os.environ.has_key('HTTP_COOKIE'):
+		cookies = Cookie.SimpleCookie(os.environ['HTTP_COOKIE'])
+	else:
+		cookies = Cookie.SimpleCookie()
+
+	def neat_date(self, seconds):
+		wanted = time.localtime(seconds)
+		result = ""
+
+		if wanted[0:3]!=self.current_time[0:3]:
+			# if it's not today
+			result = time.strftime("%d %b", wanted)
+
+		if wanted[0]*12+wanted[1] > self.current_time[0]*12+self.current_time[1]-12:
+			# only print the time if it's less than a year ago
+			result = time.strftime("%I:%m %p ",wanted) + result
+		else:
+			# otherwise tell them the year
+			result = result + ' ' +str(wanted[0])
+		return result
+
+	def choose_a_server(self):
+		print "<P>This is still being built. Don't expect anything to work.</P>"
+		print "<h2>First off, choose yourself a server.</h2>"
+		print "<UL>\n"
+	
+		list = open("servers.dat")
+		while 1:
+			name = read_with_chomping(list)
+			if not name:
+	                	break
+			host = read_with_chomping(list)
+	                port = read_with_chomping(list)
+	
+			print '<LI><A HREF="'+self.our_prefix+name+'/">'+name+'</A></LI>'
+	
+		list.close()
+	
+		print '</UL>'
+	
+		print '<h2>Interested in adding to these?</h2>'
+		print '<p>You can <a href="/">download</a> and run your'
+		print 'own RGTP server.';
+		print 'If you know of any servers not listed above,'
+		print 'please <a href="mailto:spurge@thurman.org.uk">'
+		print 'let us know</a>.</p>';
+	
+	def login(self):
+		print '<h2>' + self.server + ' login</h2>'
+		print '<UL>'
+
+		print '<LI><a href="'+self.our_prefix+self.server+'/motd/">Tell me more</a> about '+self.server+'.</LI>'
+		print '<LI>I have an account on ' + self.server + ' already: <FORM ACTION="'+self.our_prefix+self.server+'/browse/" METHOD="POST"><table border align="center"><tr><td>My email address is</td><td><INPUT TYPE="text" NAME="user"></td></tr><tr><td>and my shared secret is</td><td><INPUT TYPE="password" NAME="password"></td></tr><tr><td>Remember my login<br>(does nothing atm)</td><td><INPUT TYPE="checkbox" CHECKED NAME="remember"></td></tr><tr><td colspan="2" align="right"><INPUT TYPE="submit" VALUE=" OK "></td></tr></table></FORM></LI>'
+		print '<LI><A HREF="'+self.our_prefix+self.server+'/browse/">I\'d just like to browse</A>. (But that depends whether the server allows guest access.)</LI>'
+		print '<LI><A HREF="'+self.our_prefix+self.server+'/newbie/">I\'d like to create a new account</A>. (But this is broken at the moment.)</LI>'
+		print '</UL>'
+	
+	def browse(self):
+		self.raise_access_level(1)
+		print '<table>'
+		print '<tr><th class="index">On</th><th class="index"></th><th class="index">Most recently by</th>';
+		print '<th class="index">About</th></tr>'
+		index = {}
+		for line in self.connection.index():
+			if line[4]=='I' or line[4]=='R':
+				if not index.has_key(line[2]):
+					index[line[2]] = {'date': 0, 'count': 0, 'subject': 'Unknown' }
+
+				if line[4]=='I':
+					index[line[2]]['subject'] = line[5]
+
+				if index[line[2]]['date'] < int(line[1],16):
+					index[line[2]]['date'] = int(line[1],16)
+					index[line[2]]['from'] = line[3]
+
+				index[line[2]]['count'] = index[line[2]]['count'] + 1;
+
+		# now, sort them by date
+		
+		def compare_dates(left, right, I = index):
+			return cmp(I[left]['date'], I[right]['date'])
+
+		keys = index.keys()
+		keys.sort(compare_dates)
+		keys.reverse()
+
+		# and now we can display them.
+
+		for k in keys:
+			line = index[k]
+			print '<tr>'
+			print '<td class="time">'+self.neat_date(line['date'])+'</td>'
+			print '<td class="flags">' + str(line['count']) + '</td>'
+			print '<td class="by">'+line['from']+'</td>'
+			print '<td class="subject">'
+			print '<a href="'+self.our_prefix+self.server+'/'+k+'/">'
+			print line['subject']+'</a></td>'
+			print '</tr>'
+		print '<td colspan="3" align="center">('
+		print '<a href="'+self.our_prefix+self.server+'/post/">'
+		print 'Post a new message</a> )</td>'
+		print '<table>'
+	
+	def serverlink(self, name, title):
+		print '<a href="'+self.our_prefix+self.server+'/'+name+'/">'+title+'</a><br>'
+	
+	def motd(self):
+		html_print(self.connection.motd()[1:], self.server+' message of the day', '')
+	
+	def newbie(self):
+		print '<h2>New ' + self.server + ' account</h2>'
+
+		if self.form.has_key('newbie'):
+			print self.connection.request_account(self.form['newbie'].value)
+		else:
+			warning = self.connection.request_account('')
+			print '<table align="center"><tr><td><img src="/exclamation" width="36" height="35" alt="/!\"></td><td>'
+			print '<b>Please read this before continuing:</b><br><br>'
+			for line in warning:
+				print unentity(line) + '<br>'
+			print '</td></tr><tr><td colspan="2">'
+			print '<FORM ACTION="." METHOD="POST"><INPUT TYPE="text" NAME="newbie"><INPUT TYPE="submit" VALUE=" Apply "></FORM>'
+			print '</td></tr></table>'
+			print '<b>Note: This doesn\'t work at the moment.</b> You\'ll have to use <a href="/">a different RGTP client</a> to register.'
+	
+	def connect(self):
+		if self.server!='':
+			list = open("servers.dat")
+			while 1:
+				name = read_with_chomping(list)
+				if not name:
+		       	         	break
+				host = read_with_chomping(list)
+				port = read_with_chomping(list)
+				if name==self.server:
+					break
+			list.close()
+
+			if name:
+				remote = rgtp.fancy(host, int(port), self.form.has_key('log'))
+	
+				return remote
+
+	def raise_access_level(self, target):
+		if target > self.connection.access_level:
+			if self.user!='' and self.password!='':
+				self.connection.login(self.user, self.password)
+			else:
+#				if target==1 and self.connection.access_level==0:
+#					# try the "guest" trick
+#					self.connection.login("guest", 0)
+#				else:
+				raise rgtp.RGTPException("You need to log in for that.")
+
+	def print_headers(self):
+		print self.cookies
+		print
+		print '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">'
+		
+		print '<HEAD><TITLE>' + self.title + '</TITLE></HEAD>'
+	
+		print '<style type="text/css"><!--'
+		print 'body { margin: 0px; font-size: 12px; font-family: Verdana, Arial, Helvetica, sans-serif; }'
+		print 'th { background-color: #766276; color: #000000; }'
+		print 'td.menu a { color: #FFFFFF; text-decoration: none; }'
+		print 'td { vertical-align: top; padding: 10px;}'
+		print 'td.menu { background-color: #800000; color: #FFFFFF; font-size: 10px; }'
+		print 'th.index { background-color: #f5ff9a; text-align: left; }'
+		print 'td.time { font-face: fixed; font-size: 12px; }'
+		print '--></style>'
+	
+		print '<BODY leftmargin="0" topmargin="0" marginwidth="0" marginheight="0">'
+	
+		print '<table cellpadding="0" width="100%" height="100%" border="0" cellspacing="0" cellpadding="0">'
+		print '<tr height="64"><th width="100">'
+
+		print '</th><th align="right">'
+		print '<img src="/reverse-gossip" height="64" width="294" alt="Reverse Gossip" align="right">'
+
+		if self.server!='':
+			print "<b>this is:</b> "
+			print '<i>' + self.server + '</i><br>'
+
+		print "<b>you are:</b> "
+		if self.user=='':
+			print '<i>guest</i>'
+		else:
+			print self.user
+
+		print '</th></tr><tr height="813"><td class="menu" width="1">'
+	
+		if self.server!='':
+			self.serverlink('login','Log&nbsp;in')
+			self.serverlink('logout','Log&nbsp;out')
+			print '<br>'
+			self.serverlink('browse','Recent')
+			self.serverlink('post','Update')
+			self.serverlink('motd','Status')
+			self.serverlink('profile','Profile')
+		print '<br><br>'
+		print '<a href="'+self.our_prefix+'">Servers</a><br><br>'
+#		print '<a href="'+self.our_prefix+'faq/browse/">Help</a><br><br>'
+		print '<a href="/">Help</a><br><br>'
+		print '</td><td bgcolor="#FFFFFF" cellpadding="0">'
+	
+	def maybe_print_logs(self):
+		if not self.connection or not self.connection.base.logging:
+			return
+		print "<h2>Log</h2><ul>"
+		for anything in string.split(self.connection.base.log,'\n'):
+			print '<li>'
+			if not anything or anything=='':
+				pass
+			elif anything[0]=='<':
+				print '<b>' + anything[1:] + '</b>'
+			elif anything[0]=='>':
+				print anything[1:]
+			else:
+				print '<i>'+anything+'</i>'
+			print '</li>'
+		print "</ul>"
+
+	def harvest(self, key):
+		if self.form.has_key(key):
+			return form[key].value
+		else:
+			return ''
+
+	def cookiename(self, key):
+		return self.server + "-" + key
+
+	def set_cookie(self, key, value):
+		name = self.cookiename(key)
+		self.cookies[name] = value
+		self.cookies[name]["path"] = self.our_prefix + self.server
+		self.cookies[name]["expires"] = "+3M"
+
+	def cookie(self, key):
+		name = self.cookiename(key)
+		if self.cookies.has_key(name):
+			return self.cookies[name].value
+		else:
+			return ''
+
+	def harvest_with_cookies(self, key):
+		if self.form.has_key(key):
+			temp = self.form[key].value
+			self.set_cookie(key, temp)
+			return temp
+		else:
+			return self.cookie(key)
+
+	def decide_tasks(self):
+		# Some things we can just pick up from arguments.
+
+		self.server = self.harvest('server')
+		self.verb = self.harvest('verb')
+		self.item = self.harvest('item')
+
+		# Some we can take from the path.
+	
+		if os.environ.has_key('PATH_INFO'):
+			path = string.split(os.environ['PATH_INFO'],'/')
+
+			for thing in path:
+				if thing=='':
+					continue
+				elif self.server=='':
+					self.server=thing
+				elif self.item=='' and len(thing)==8:
+					self.item=thing
+				elif self.verb=='':
+					self.verb=thing
+				else:
+					raise rgtp.RGTPException("what's " + thing + " good for?")
+
+		# Hmm, defaults...
+	
+		if self.verb=='':
+			if self.item=='':
+				self.verb = 'login'
+			else:
+				self.verb = 'read'
+
+		# Now, username and password.
+		self.user = self.harvest_with_cookies('user')
+		self.password = self.harvest_with_cookies('password')
+	
+	def begin_tasks(self):
+		"Start working on a task as soon as we know what it is, before the HTML starts printing."
+		if self.verb=='read':
+			self.raise_access_level(1)
+			self.this_item = self.connection.item(self.item)
+	
+	def finish_tasks(self):
+		if self.server=='':
+			self.choose_a_server()
+		elif self.verb=='login':
+			self.login()
+		elif self.verb=='browse':
+			self.browse()
+		elif self.verb=='read':
+			for i in self.this_item[2:]:
+				html_print(i[2], i[0], i[1])
+		elif self.verb=='motd':
+			self.motd()
+		elif self.verb=='newbie':
+			self.newbie()
+		else:
+			print "Seems we haven't implemented "+self.verb+"."
+	
+	
+print "Content-Type: text/html"
+
+y = yarrow()
+y.decide_tasks()
+
+try:
+	y.connection = y.connect()
+	y.begin_tasks()
+	y.print_headers()
+except rgtp.RGTPException, b:
+	y.print_headers()
+	print "<h2>Early exception</h2>"
+	print b
+	print y.connection.log
+
+try:
+	y.finish_tasks()
+except rgtp.RGTPException, b:
+	print "<h2>Exception</h2>"
+	print b
+
+y.maybe_print_logs()
+
+print "</td></tr></table></BODY></HTML>"
+
