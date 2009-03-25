@@ -1,0 +1,23 @@
+yarrow v0.10
+------------
+
+A full README will come in a later version. For now,
+please mail any questions to thomas@thurman.org.uk .
+
+What's still to come before we hit v1.0:
+ * User account requests.
+    (This is known to be broken in v0.1. You should use
+     another client, such as WrenGROGGS or GREED, for
+     this, or simply mail the server's editors and ask.)
+
+ * Automatic highlighting of embedded URLs, email
+    addresses and itemids.
+
+ * Possibly some implementation of the editor commands.
+
+Visit http://rgtp.thurman.org.uk/yarrow/ for the latest
+news, and http://rgtp.thurman.org.uk/gossip/ to see Yarrow
+in practice.
+
+Thomas
+

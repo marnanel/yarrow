@@ -24,6 +24,7 @@ import socket
 import string
 import md5
 import binascii
+import wrapping
 
 ###########################################################
 
@@ -45,8 +46,12 @@ class response:
 		"Creates a response from a line of text received from the server."
 
 		if code==None:
-			self.numeric = int(text[0:3])
-			self.textual = text[4:]
+			try:
+				self.numeric = int(text[0:3])
+				self.textual = text[4:]
+			except:
+				self.numeric = -999
+				self.textual = '(Weird bug finding:) ' +text
 		else:
 			self.numeric = code
 			self.textual = text
@@ -55,7 +60,7 @@ class response:
 	def maybe_panic(self):
 		if self.numeric==481:
 			raise RGTPException("Timeout.")
-		elif self.numeric==484:
+		elif self.numeric==484 or self.numeric==-999:
 			raise RGTPException("Server internal error: "+self.textual)
 		elif self.numeric==500 or self.numeric==510 or self.numeric==511 or self.numeric==512 or self.numeric==582:
 			raise RGTPException("Broken client.")
@@ -129,14 +134,6 @@ class stomach(multiline):
 class base:
 	"Basic RGTP handling."
 
-	def __init__(self):
-		self.state=0
-		self.outgoing=0
-		self.incoming=0
-		self.cback=0
-		self.logging=0
-		self.log=''
-
 	def __init__(self, host, port, cback, logging):
 		self.logging=logging
 		self.log=''
@@ -172,14 +169,20 @@ class base:
 
 	def receive(self):
 		temp = string.rstrip(self.incoming.readline())
-		if self.logging: print "\n<" + temp#self.log = self.log + "\n<" +temp
+		if self.logging: self.log = self.log + "\n<" +temp
 		return temp
 
-	def send(self, message, cback):
-		self.cback = cback
+	def raw_send(self, message):
+		"Simply sends one line to the server."
 		self.outgoing.write(message + "\r\n")
 		self.outgoing.flush()
-		if self.logging: print "\n>"+message # self.log = self.log + "\n>"+message
+		if self.logging:
+			self.log = self.log + "\n>"+message
+
+	def send(self, message, cback):
+		"Sends one line to the server, and waits for a response."
+		self.cback = cback
+		self.raw_send(message)
 		self.get_line()
 
 ###########################################################
@@ -206,11 +209,13 @@ class fancy:
 
 			def __init__(self, base, email, sharedsecret):
 				multiline.__init__(self)
-				clientnonce = "8a0eb22b27cc2dd5373f8cd9657fe8ea"
-				hash = md5.new()
+				self.clientnonce = "8a0eb22b27cc2dd5373f8cd9657fe8ea"
+				self.hash = md5.new()
 				self.base = base
 				self.email = email[0:16]
-				# todo: pad with nuls if it's <16 bytes
+				while len(self.email)<16:
+					# pad with nuls if it's <16 bytes
+					self.email += '\0'
 				self.sharedsecret = sharedsecret
 
 			def __call__(self, message):
@@ -329,45 +334,67 @@ class fancy:
 
 			def put_buffer(self):
 				if self.buffer!='':
-					temp = string.split(self.buffer, '\n')
-					name = ''
+					lines = string.split(self.buffer, '\n')
+					grogname = ''
+					author = ''
 					date = ''
 
-					if temp[0][0:5]=='Item ':
-						date = temp[0][19:]
-						temp = temp[1:]
-					elif temp[0][0:11]=='Reply from ':
-						date = temp[0][11:]
- 						temp = temp[1:]
+					# Firstly, there'll be "item" or "reply" lines.
+					# (Perhaps we should complain if there aren't.)
+					if lines[0][0:5]=='Item ':
+						date = lines[0][19:]
+						lines = lines[1:]
+					elif lines[0][0:11]=='Reply from ':
+						date = lines[0][11:]
+ 						lines = lines[1:]
 
-					if temp[0][0:5]=='From ':
-						name = temp[0][5:]
-						temp = temp[1:]
+					atpos = string.rfind(date, ' at ')
+					if atpos != -1:
+						author = date[:atpos]
+						date = date[atpos+4:]
 
-					if temp[0][0:9]=='Subject: ':
-						temp = temp[1:]
+					# "From" introduces an explicit grogname.
+					if lines[0][0:5]=='From ':
+						grogname = lines[0][5:]
+						lines = lines[1:]
 
-					if name=='':
-						atpos = string.find(date, ' at ')
-						if atpos!=-1:
-							name = date[:atpos]
-							date = date[atpos+4:]
+					# If the server tells us a subject, ignore it;
+					# we'll have other ways of finding that out.
+					if lines[0][0:9]=='Subject: ':
+						lines = lines[1:]
 
-					self.result.append((name, date, temp))
+					# Right. If we don't know the grogname by now,
+					# it might have been short enough to go into the
+					# author field.
+					if grogname=='':
+						openbracket = string.rfind(author, '(')
+						if openbracket!=-1 and author[-1]==')':
+							# Ah, so it was.
+							grogname = author[:openbracket-1]
+							author = author[openbracket+1:-1]
+						else:
+							# Well, just give them the address again.
+							grogname = author
+
+					self.result.append((grogname, date, author, lines))
 
 					self.buffer=''
 
 			def __call__(self, message):
 				if message.code()==-1:
+					text = message.text()
 					if self.firstline:
 						self.firstline = 0
 						# should parse it, but...
-						self.result.append(message.text())
-						self.result.append(message.text())
-					elif message.text()!='' and message.text()[0]=='^':
+						# FIXME: what's this about?
+						self.result.append(text)
+						self.result.append(text)
+					elif text!='' and text[0]=='^' and text[1]!='^':
 						self.put_buffer()
 					else:
-						self.buffer=self.buffer+message.text()+"\n"
+						if text!='' and text[0] in ['^', '.']:
+							text = text[1:]
+						self.buffer=self.buffer+text+"\n"
 				elif message.code()==0:
 					self.put_buffer()
 					self.complete()
@@ -381,20 +408,23 @@ class fancy:
 		return towel.result
 
 
-        def raise_access_level(self, target, user=None, password=None):
-                if target > self.access_level:
+        def raise_access_level(self, target=None, user=None, password=None):
+		# Set target==None to get as high as we can with current
+		# credentials.
+                if target==None or target > self.access_level:
 			# If they want more than they already have...
-                        if user!=None:
+                        if user!=None and user!='':
 				# They have a username. Fine: use it.
                                 self.login(user, password)
-		                if target > self.access_level:
+		                if target!=None and target > self.access_level:
 					raise RGTPException(user + " doesn't have a high enough access level.")
                         else:
 				# No username. Hmm, maybe we can try the "guest" trick.
-                                if target==1 and self.access_level==0:
+                                if (target==None or target==1) and self.access_level==0:
                                         self.login("guest", 0)
                                 else:
-                                        raise rgtp.RGTPException("You need to log in for that.")
+					if target!=None:
+	                                        raise RGTPException("You need to log in for that.")
 
 		# So, did it work?
                 if target > self.access_level:
@@ -402,7 +432,6 @@ class fancy:
 
 	def stat(self, id):
 		class status_reader(callback):
-			access_level = 0
 			def __call__(self, message):
 				if message.code()==211:
 					self.result = message.text()
@@ -419,4 +448,98 @@ class fancy:
 		self.base.send("STAT "+id, towel)
 		r = towel.result
 		return {'from': maybe_blank(r[0:8]), 'to': maybe_blank(r[9:17]), 'edited': maybe_blank(r[18:26]), 'replied': maybe_blank(r[27:35]), 'subject': r[36:] }
+
+	def send_data(self, grogname, message):
+		class dumper(multiline):
+
+			def __init__(self, name, data, base):
+                                multiline.__init__(self)
+				self.name = name
+				self.data = data
+				self.base = base
+
+			def __call__(self, message):
+				def dot_doubled(line):
+					if line!='' and line[0]=='.':
+						# Dot-doubling: if it already
+						# begins with a dot, it needs
+						# another.
+						return '.' + line
+					else:
+						return line
+
+				if message.code()==150:
+					# The server says "go ahead". So here goes!
+					self.base.raw_send(dot_doubled(self.name))
+					for paragraph in self.data:
+						for line in wrapping.wrap(paragraph):
+							self.base.raw_send(dot_doubled(line))
+					# All done!
+					self.base.raw_send('.')
+				elif message.code()==350:
+					self.complete()
+				else:
+					raise("Wasn't expecting " + str(message))
+
+		self.base.send('DATA', dumper(grogname, message, self.base))
+
+	def post(self, item, subject):
+		# If item is None, this is a NEWI.
+		# If item is not None and subject is None, this is a REPL.
+		# If item is not None and subject is not None, this is a CONT.
+		#
+		# Returns:
+		#  -1 -- failure because this item has been edited
+		#   1 -- failure because this item is full now; you must CONT
+		# a string -- success. the string is the itemid
+		# (Is this ugly? Maybe we should return a tuple.)
+		#
+		# Obviously not all these can be returned in all cases.
+		# You should check for the item having been edited already
+		# yourself, as well, and not just rely on this function
+		# returning -1; there are cases this function won't pick up
+		# (such as editing which doesn't cause continuation). 
+
+		class item_generator(multiline):
+			def __init__(self, itemid):
+                                multiline.__init__(self)
+				self.itemid = itemid
+				self.already_edited_status = 0
+
+			def __call__(self, message):
+				if message.code()==120:
+					# A new itemid for us.
+					self.itemid = message.text()
+				elif message.code()==122:
+					pass # for now. hmm.
+				elif message.code()==220:
+					# woohoo! all done
+					self.complete()
+				elif message.code()==421:
+					self.already_edited_status = 1
+					self.complete()
+				elif message.code()==422:
+					# it's overflowed!
+					self.already_edited_status = -1
+					self.complete()
+				else:
+					raise("Wasn't expecting " + str(message))
+
+		towel = item_generator(item)
+		if item==None:
+			self.base.send('NEWI '+subject, towel)
+		else:
+			self.base.send('REPL '+item, towel)
+
+			if towel.already_edited_status==1 and subject!=None:
+				# we were given a subject in case this happened.
+				# Use it.
+				towel = item_generator(item)
+				self.base.send('CONT '+subject, towel)
+
+		if towel.already_edited_status == 0:
+			return towel.itemid
+		else:
+			return towel.already_edited_status
+
 
