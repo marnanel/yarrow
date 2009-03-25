@@ -137,7 +137,7 @@ class read_handler:
 					i['author'],
 					time.strftime("%a %d %b %Y %I:%M:%S %p",
 						time.localtime(i['timestamp'])),
-					0) # FIXME: y.reformat
+					y.reformat)
 				print '<a name="after-%x"></a>' %(i['sequence'])
 
 			possibly_link(y, self, 'Continued in', 'to', '')
@@ -1167,7 +1167,7 @@ class yarrow:
 			server = config.server_details(self.server)
 			self.server_details = server
 			connection = rgtp.fancy(server['host'],
-				server['port'], 0) # 0=logging...FIXME
+				server['port'], self.log)
 			if self.verb!='newbie': # ugh, ugly hack
 				if self.user:
 					connection.raise_access_level(None,
@@ -1286,6 +1286,11 @@ class yarrow:
 			self.user = user.from_session_key(self.incoming_cookies['yarrow-session'].value)
 		else:
 			self.user = None
+
+		# legacy (remove later)
+		self.usenc = 0
+		self.reformat = 0
+		self.log = 0
 
 		if self.item!='' and self.verb=='':
 			self.verb = 'read' # implicit for items
