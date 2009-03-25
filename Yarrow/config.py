@@ -41,7 +41,10 @@ def backing_store_path(filename):
 
 def value(section, option):
 	"""Returns a value from the system configuration file."""
-	return settings.get(section, option)
+	try:
+		return settings.get(section, option)
+	except:
+		return None
 
 def server_details(name):
 	"""Returns a dictionary of configuration information for the server
@@ -69,10 +72,16 @@ def server_details(name):
 		# Use IANA's default RGTP port
 		port = 1431
 
+	longdesc = value(section, 'longdesc')
+	if longdesc == None:
+		longdesc = ''
+
 	return {
 		'host': address[0],
 		'port': port,
-		'description': value(section, 'description')}
+		'description': value(section, 'description'),
+		'longdesc': longdesc,
+		}
 
 def all_known_servers():
 	"Returns a dictionary mapping name to details for all known RGTP servers."

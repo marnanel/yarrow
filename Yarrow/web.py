@@ -669,12 +669,20 @@ class post_handler:
 			details = y.connection.post(item, subject)
 
 			# Success! Work out the URL of the new posting.
-			print '<h1>Added comment</h1>'
-			print 'Your comment was added. You can view it'
+			print '<h1>Added gossip</h1>'
+			print 'Your gossip was added. You can view it'
 			print '<a href="%s/%s#%x">here</a>.' % (
 				y.url_prefix(),
 				details['itemid'],
 				details['sequence'])
+
+			if y.readmyown:
+				# We've read our own comments; update the
+				# "most recent sequence" number of this item
+				# to show so.
+
+				y.user.last_sequences[y.server][details['itemid']]=details['sequence']
+				y.user.save()
 
 		except rgtp.AlreadyEditedError:
 			# Nope, someone's been there before us.
@@ -727,6 +735,9 @@ class editlog_handler:
 		y.title = y.server + ' edit log'
 
 	def body(self, y):
+		if you_should_be_logged_in(y):
+			return
+
 		print """
 <h1>Edit log</h1>
 <p>Only editors have the power to change the entries that
@@ -744,6 +755,7 @@ the item itself, to explain.</p>
 </tr>"""
 
 		edits = y.connection.edit_log()
+		edits.reverse()
 
 		for thing in edits:
 			print '<tr>'
@@ -879,7 +891,7 @@ the MOTD.</p>""" % (
 
 		print """<p>Show what messages were passed between us and the RGTP server
 to generate each page. Unless you're hugely interested in
-<a href="http://www.groggs.group.cam.ac.uk/protocol.txt">RGTP
+<a href="http://www.groggs.group.cam.ac.uk/groggs/protocol.txt">RGTP
 nargery</a>, you probably don't want this turned on.</p>
 
 <p><input type="checkbox" name="log"%s> Show RGTP logs.</p>
@@ -887,15 +899,27 @@ nargery</a>, you probably don't want this turned on.</p>
 	logging_checked)
 
 
-		uidlink_checked = ''
+		checked = ''
 	        if meta_field(y, 'uidlink')!=0:
-			uidlink_checked = ' checked'
+			checked = ' checked'
 
 		print '<h2>Linking userids</h2>'
 		print '<p>Yarrow can turn userids into hyperlinks; this is mostly useful,'
 		print 'but with some kinds of browser it just gets annoying.</p>'
-		print '<p><input type="checkbox" name="uidlink"%s>' % (uidlink_checked)
+		print '<p><input type="checkbox" name="uidlink"%s>' % (checked)
 		print 'Linkify userids.</p>'
+		
+		checked = ''
+	        if meta_field(y, 'readmyown')!=0:
+			checked = ' checked'
+
+		print '<h2>Marking your own gossip as unread</h2>'
+		print '<p>When you post to this server, do you want your own contributions'
+		print 'to be marked as read as soon as you post them? If you leave this'
+		print 'turned off, they will stay unread until you actually read them,'
+		print 'just like contributions from anyone else.</p>'
+		print '<p><input type="checkbox" name="readmyown"%s>' % (checked)
+		print 'Mark that I\'ve read anything I post.</p>'
 		
                 print '<input type="submit" value=" OK ">'
 		print '<input type="hidden" name="yes" value="y">'
@@ -1000,6 +1024,11 @@ nargery</a>, you probably don't want this turned on.</p>
 			put_meta_field(y, 'uidlink', 1)
 		else:
 			put_meta_field(y, 'uidlink', 0)
+
+		if y.form.has_key('readmyown') and y.form['readmyown'].value=='on':
+			put_meta_field(y, 'readmyown', 1)
+		else:
+			put_meta_field(y, 'readmyown', 0)
 
 		y.user.save()
 
@@ -1308,7 +1337,7 @@ class server_chooser_handler:
 		server_names.sort()
 
 		for server in server_names:
-			print '<tr><td><a href="%s/browse">%s</a></td><td>%s</td><td>' % (
+			print '<tr><td><a href="%s">%s</a></td><td>%s</td><td>' % (
 				y.url_prefix(server),
 				server,
 				servers[server]['description'])
@@ -1330,7 +1359,7 @@ class server_chooser_handler:
 	
 		print '<h1>Interested in adding to these?</h1>'
 		print '<p>You can'
-		print '<a href="http://rgtp.thurman.org.uk/spurge/">download</a>'
+		print '<a href="http://freshmeat.net/projects/spurge">download</a>'
 		print 'and run your own RGTP server.'
 		print 'If you know of any servers not listed above,'
 		print 'please <a href="mailto:spurge@thurman.org.uk">'
@@ -1338,24 +1367,45 @@ class server_chooser_handler:
 
 ################################################################
 
-class verb_listing_handler:
+class server_frontend_handler:
 	def __init__(self, list):
 		self.verbs = list
 
 	def head(self, y):
-		y.title = 'Intermediate page'
+		if not y.server:
+			# Probably we're redirecting...
+			return
+		
+		y.title = '%s - %s' % (y.server,
+				       y.server_details.get('description'))
 
 	def body(self, y):
-		print '<h1>Places you can go from here</h1>'
+		if not y.server:
+			# Probably we're redirecting...
+			return
+
+		print '<h1>%s</h1>' % (y.server)
+
 		if y.server=='sys':
-			print '<p>These are all the verbs you can use'
-			print 'globally, rather than only on one server.</p>'
-		else:
-			print '<p>These verbs apply only to '+y.server+'.</p>'
+			# not a real server! Bail.
+			print "<p>This isn't a real server; it's just used as"
+			print "a placeholder. Best place to go would be"
+			print '<a href=".">back to the main page</a>.'
+			return
+
+		if y.server_details.has_key('longdesc'):
+			print y.server_details['longdesc']
+
+		print '<p>%s lives on the host <code>%s</code>, port <code>%s</code>.</p>' % (
+			y.server.title(),
+			y.server_details['host'],
+			y.server_details['port'])
+
 		print '<ul>'
-		for verb in self.verbs.keys():
-			print '<li><a href="'+y.url_prefix()+'/'+verb+'">'
-			print verb+'</a></li>'
+		print '<li><a href="%s/browse"><b>Read %s now!</b></a></li>' % (
+			y.url_prefix(),
+			y.server.title())
+		print '<li><a href=".">Look for some other servers.</a></li>'
 		print '</ul>'
 			
 
@@ -1879,10 +1929,12 @@ span.hop { font-size: 15px; border:groove; color: #777777; font-weight:bold;}
 							'reformat', 0)
 			self.log = self.user.state(self.server, 'log', 0)
 			self.uidlink = self.user.state(self.server, 'uidlink', 1)
+			self.readmyown = self.user.state(self.server, 'readmyown', 1)
 		else:
 			self.reformat = 0
 			self.log = 0
 			self.uidlink = 1
+			self.readmyown = 0 # but you can't post anyway
 
 		if self.item!='' and self.verb=='':
 			self.verb = 'read' # implicit for items
@@ -1938,8 +1990,8 @@ before the HTML starts printing."""
 
 		if self.verb=='':
 			# They didn't say what they wanted to do,
-			# so give them a list.
-			self.verb_handler = verb_listing_handler(tasklist)
+			# so give them a general overview.
+			self.verb_handler = server_frontend_handler(tasklist)
 		elif tasklist.has_key(self.verb):
 			# Ah, we know about what they wanted to do.
 			# Create them a handler to do it for them.
