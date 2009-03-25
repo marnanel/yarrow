@@ -1,4 +1,25 @@
 #!/usr/bin/python
+#
+#  yarrow - (yet another retro reverse-ordered website?)
+#  v0.02
+#
+# Copyright (c) 2002 Thomas Thurman
+# thomas@thurman.org.uk
+# 
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have be able to view the GNU General Public License at 
+# http://www.gnu.org/copyleft/gpl.html ; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
+
 
 import cgi
 import rgtp
@@ -98,26 +119,14 @@ class yarrow:
 		print '</UL>'
 	
 	def browse(self):
-		self.raise_access_level(1)
+		self.connection.raise_access_level(1)
 		print '<table>'
 		print '<tr><th class="index">On</th><th class="index"></th><th class="index">Most recently by</th>';
 		print '<th class="index">About</th></tr>'
-		index = {}
-		for line in self.connection.index():
-			if line[4]=='I' or line[4]=='R':
-				if not index.has_key(line[2]):
-					index[line[2]] = {'date': 0, 'count': 0, 'subject': 'Unknown' }
 
-				if line[4]=='I':
-					index[line[2]]['subject'] = line[5]
+		index = self.connection.interpreted_index()
 
-				if index[line[2]]['date'] < int(line[1],16):
-					index[line[2]]['date'] = int(line[1],16)
-					index[line[2]]['from'] = line[3]
-
-				index[line[2]]['count'] = index[line[2]]['count'] + 1;
-
-		# now, sort them by date
+		# and now we can display them. sort them by date.
 		
 		def compare_dates(left, right, I = index):
 			return cmp(I[left]['date'], I[right]['date'])
@@ -125,8 +134,6 @@ class yarrow:
 		keys = index.keys()
 		keys.sort(compare_dates)
 		keys.reverse()
-
-		# and now we can display them.
 
 		for k in keys:
 			line = index[k]
@@ -136,12 +143,14 @@ class yarrow:
 			print '<td class="by">'+line['from']+'</td>'
 			print '<td class="subject">'
 			print '<a href="'+self.our_prefix+self.server+'/'+k+'/">'
-			print line['subject']+'</a></td>'
-			print '</tr>'
+			if not line['live']: print '<i>'
+			print line['subject']
+			if not line['live']: print '</i>'
+			print '</a></td></tr>'
 		print '<td colspan="3" align="center">('
 		print '<a href="'+self.our_prefix+self.server+'/post/">'
 		print 'Post a new message</a> )</td>'
-		print '<table>'
+		print '</table>'
 	
 	def serverlink(self, name, title):
 		print '<a href="'+self.our_prefix+self.server+'/'+name+'/">'+title+'</a><br>'
@@ -183,23 +192,12 @@ class yarrow:
 	
 				return remote
 
-	def raise_access_level(self, target):
-		if target > self.connection.access_level:
-			if self.user!='' and self.password!='':
-				self.connection.login(self.user, self.password)
-			else:
-#				if target==1 and self.connection.access_level==0:
-#					# try the "guest" trick
-#					self.connection.login("guest", 0)
-#				else:
-				raise rgtp.RGTPException("You need to log in for that.")
-
 	def print_headers(self):
 		print self.cookies
 		print
 		print '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">'
 		
-		print '<HEAD><TITLE>' + self.title + '</TITLE></HEAD>'
+		print '<HEAD><TITLE>' + self.title + '</TITLE>'
 	
 		print '<style type="text/css"><!--'
 		print 'body { margin: 0px; font-size: 12px; font-family: Verdana, Arial, Helvetica, sans-serif; }'
@@ -209,7 +207,7 @@ class yarrow:
 		print 'td.menu { background-color: #800000; color: #FFFFFF; font-size: 10px; }'
 		print 'th.index { background-color: #f5ff9a; text-align: left; }'
 		print 'td.time { font-face: fixed; font-size: 12px; }'
-		print '--></style>'
+		print '--></style></head>'
 	
 		print '<BODY leftmargin="0" topmargin="0" marginwidth="0" marginheight="0">'
 	
@@ -225,9 +223,11 @@ class yarrow:
 
 		print "<b>you are:</b> "
 		if self.user=='':
-			print '<i>guest</i>'
+			print '<i>guest</i><br>'
 		else:
-			print self.user
+			print self.user + '<br>'
+
+		print '<b>client:</b> <i>yarrow 0.02</i>'
 
 		print '</th></tr><tr height="813"><td class="menu" width="1">'
 	
@@ -331,7 +331,9 @@ class yarrow:
 	def begin_tasks(self):
 		"Start working on a task as soon as we know what it is, before the HTML starts printing."
 		if self.verb=='read':
-			self.raise_access_level(1)
+			self.connection.raise_access_level(1)
+			self.this_status = self.connection.stat(self.item)
+			self.title = self.this_status['subject']
 			self.this_item = self.connection.item(self.item)
 	
 	def finish_tasks(self):
@@ -342,8 +344,18 @@ class yarrow:
 		elif self.verb=='browse':
 			self.browse()
 		elif self.verb=='read':
+			def possibly_link(self, prefix, key):
+				target = self.this_status[key]
+				if target:
+					name = self.connection.stat(target)['subject']
+					print '<p><i>(' + prefix
+					print '<a href="' + self.our_prefix + self.server + '/' + target + '">' + name + '</a>)</i></p>'
+			print '<h2>' + self.title + '</h2>'
+
+			possibly_link(self, 'Continued from', 'from')
 			for i in self.this_item[2:]:
 				html_print(i[2], i[0], i[1])
+			possibly_link(self, 'Continued in', 'to')
 		elif self.verb=='motd':
 			self.motd()
 		elif self.verb=='newbie':
