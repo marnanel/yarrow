@@ -1,5 +1,5 @@
-#!/usr/bin/python
-#
+"Configuration mechanisms for Yarrow."
+
 #  yarrow - (yet another retro reverse-ordered website?)
 #  v0.40
 #
@@ -22,33 +22,60 @@
 
 import ConfigParser
 import string
+import os.path
+
+# The line below beginning "baseconf" is modified by the installation script
+# to point at your base config file for yarrow. If you need to put that
+# somewhere else, modify this line yourself.
+baseconf = '/etc/yarrow.conf'
 
 settings = ConfigParser.ConfigParser()
-settings.read('/etc/yarrow.conf')
+settings.read(baseconf)
+
+backing_store_dir = settings.get('general', 'backing-store')
+
+def backing_store_path(filename):
+	"""Returns the path to a file named |filename| that we can
+	guarantee stays where it is between runs."""
+	return os.path.join(backing_store_dir, filename)
 
 def value(section, option):
+	"""Returns a value from the system configuration file."""
 	return settings.get(section, option)
 
-# FIXME: Peter Colledge asks that this also matches on
-#    hostname -- if port==rgtp
-#    hostname:port
 def server_details(name):
+	"""Returns a dictionary of configuration information for the server
+	named |name|; |name| can either be a nickname (i.e. a paragraph name
+	in yarrow.conf) or its hostname (as given in yarrow.conf)."""
+
 	section = name+'-server'
 
 	if not settings.has_section(section):
-		raise Exception(self.server + ' is not a known server')
+		# hmm, it doesn't exist.
+		# Peter Colledge asked for this extended matching:
+
+		found = 0
+		for server in settings.sections():
+			if server.endswith('-server') and settings.get(server, 'address')==name:
+				section = server
+				found = 1
+		if not found:
+			raise Exception(name + ' is not a known server')
 
 	address = string.split(value(section, 'address'), ':')
 	if len(address)>1:
 		port = int(address[1])
 	else:
+		# Use IANA's default RGTP port
 		port = 1431
+
 	return {
 		'host': address[0],
 		'port': port,
 		'description': value(section, 'description')}
 
 def all_known_servers():
+	"Returns a dictionary mapping name to details for all known RGTP servers."
 	result = {}
 
 	for candidate in settings.sections():

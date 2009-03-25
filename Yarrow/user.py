@@ -1,8 +1,5 @@
-#!/usr/bin/python
-#
-#  yarrow - (yet another retro reverse-ordered website?)
-#  v0.40
-#
+"Handles management of users-- passwords, options and so on."
+
 # Copyright (c) 2002 Thomas Thurman
 # thomas@thurman.org.uk
 # 
@@ -26,8 +23,8 @@ import common
 import smtplib
 import config
 
-users_file = '/var/lib/yarrow/users'
-sessions_file = '/var/lib/yarrow/sessions'
+users_file = config.backing_store_path('users')
+sessions_file = config.backing_store_path('sessions')
 
 class AlreadyExistsException(Exception):
 	"Thrown when you attempt to create a user that already exists."
@@ -39,6 +36,7 @@ def hash_of(password):
 	return temp.hexdigest()
 
 class user:
+	"Represents one user of the system."
 	def __init__(self, username):
 		self.username = username
 		self.metadata = {}
@@ -93,7 +91,7 @@ class user:
 		self.password = hash_of(new_password)
 
 	def invent_new_password(self):
-		"Sets the password to something random, and notifies the user. (Be sure to save after calling this, or the user will get confused."
+		"Sets the password to something random, and notifies the user. (Be sure to save after calling this, or the user will get confused.)"
 
 		the_password = common.random_hex_string(8) # not the MD5 hash!
 		self.set_password(the_password)
@@ -115,22 +113,46 @@ Thank you for using yarrow.\r\n" % \
 		mail.sendmail(sent_from, sent_to, message)
 		mail.quit()
 
+class visitor(user):
+	"Represents a casual user of the system whose name we don't know."
+	def __init__(self):
+		self.username = 'Visitor'
+		self.metadata = {}
+		self.last_sequences = {}
+
+	def set_state(self, server, field, value):
+		# nope. we're read-only
+		pass
+
+	def state(self, server, field, default):
+		return default
+
+	def password_matches(self, another):
+		return 0 # nah!
+
+	def save(self, must_not_exist=0):
+		# no, go away
+		pass
+
+	def set_password(self, new_password):
+		pass # quite literally!
+
+	def invent_new_password(self):
+		pass
+	
 def from_name(username):
 	"Returns a user with the given username. If none exists, returns None."
-	users = shelve.open(users_file)
-	if users.has_key(username):
-		result = users[username]
+	if username=='Visitor':
+		return visitor()
 	else:
-		result = None
-	users.close()
-	return result
+		users = shelve.open(users_file)
+		result = users.get(username)
+		users.close()
+		return result
 
 def from_session_key(key):
 	sessions = shelve.open(sessions_file)
-	if sessions.has_key(key):
-		username = sessions[key]
-	else:
-		username = None
+	username = sessions.get(key)
 	sessions.close()
 
 	if username:

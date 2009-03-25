@@ -1,23 +1,356 @@
-yarrow v0.30
-------------
 
-A full README will come in a later version. For now,
-please mail any questions to thomas@thurman.org.uk .
+   $Header: /var/cvs/yarrow/index.php,v 1.8 2002/12/08 16:14:39 marnanel
+   Exp $
+   
+Yarrow: the manual
 
-What's still to come before we hit v1.0:
- * User account requests.
-    (This is known to be broken in v0.1. You should use
-     another client, such as WrenGROGGS or GREED, for
-     this, or simply mail the server's editors and ask.)
+Contents
 
- * Automatic highlighting of embedded URLs, email
-    addresses and itemids.
+    1. [1]Introduction
+    2. [2]Getting started as a user
+         1. [3]Basics
+         2. [4]GROGGS
+         3. [5]A glossary
+         4. [6]Finding out more
+    3. [7]Getting started as an administrator
+         1. [8]Installing yarrow
+         2. [9]Installing your own RGTP servers
+    4. [10]The future
+    5. [11]Credits
+       
+1. Introduction
 
- * Possibly some implementation of the editor commands.
+   This is the manual for yarrow. Yarrow lets you read RGTP bulletin
+   boards, such as [12]GROGGS at Cambridge University, using a web
+   browser.
+   
+   Some other pages worth looking at: [13]screen shots, [14]contact
+   information, and [15]links to other RGTP sites.
+   
+2. Getting started as a user
 
-Visit http://rgtp.thurman.org.uk/yarrow/ for the latest
-news, and http://rgtp.thurman.org.uk/gossip/ to see Yarrow
-in practice.
+2.1. Basics
 
-Thomas
+   Yarrow is most commonly used with GROGGS, so I'll use that as an
+   example here. The procedure is fairly similar for any RGTP board,
+   though. You'll also need a copy of yarrow to play with; if you don't
+   have one locally, you can use the example one at
+   [16]http://rgtp.thurman.org.uk/gossip. There's also [17]a copy running
+   inside the University Data Network, but that may not always be running
+   the most recent version of the program. If you want to set up a copy
+   on your own computer, skip ahead to the section "Getting started as an
+   administrator".
+   
+   Firstly, it's useful to set up a yarrow account, so that all state
+   (such as whether or not you've read a particular item) can be held on
+   the yarrow server. It's not necessary to set one up; if you go to
+   [18]the GROGGS index without having logged in, for example, you can
+   simply click the "visitor" button to read the whole of GROGGS. (You
+   might like to try doing that now for a bit.) However, you'll need an
+   account if you want to post, so let's set one up: click "log in" on
+   the right-hand menu, and then "get a new account". Enter your email
+   address, which yarrow uses to identify you, and press OK.
+   
+   While you're waiting for the confirmation email from the server, let's
+   discuss how RGTP works. An RGTP board consists of several discussion
+   threads, called items. Any user with posting access can create new
+   items, or add replies to the end of an item. Items have a fixed
+   maximum size, so when one gets too long, you have to start another,
+   with a name more pertinent to whatever the discussion's about now
+   (this helps minimise the distance between subject lines and discussion
+   topics that's so common on Usenet). The system tracks when a new item
+   is a continuation of an old one, so it's possible to follow a long
+   discussion through-- this is known as a thread.
+   
+   You should have your email from the server by now. Click the "change
+   your password" link, and fill in the address you used, the password
+   you were given, and two copies of a new password. Once you've clicked
+   OK, you'll be logged into yarrow.
+   
+2.2. GROGGS
 
+   Click the "gossip" link in this page (or just go back to [19]the main
+   yarrow page) and you'll be presented with a list of servers. We want
+   to read GROGGS, so click on the "groggs" link in the left-hand column.
+   
+   You're now looking at [20]the index of items on GROGGS-- well, the
+   most recent of them: you can page back all the way to 1995, when
+   GROGGS took its current form. Each item shows the date it was most
+   recently added to (with the newer ones towards the top), the number
+   ("#") of replies to that item, the name of the user who most recently
+   added to it, and the subject. The items in bold, which will be all of
+   them at present, are items which contain replies you haven't read;
+   those in italics are full items, which will have been continued
+   further up the index.
+   
+   Click any of the subject lines to read that item and all the replies.
+   Each reply is preceded by a block giving the user's email address, and
+   the date of posting, on the right. On the left is the user's grogname:
+   a fanciful, possibly descriptive, piece of text which is associated
+   with that particular user. If you were logged in as a regular user, at
+   the bottom of the page there'd be [21]a box to add your own reply.
+   
+2.3. A glossary
+
+   Spend a little time exploring GROGGS now. Here's some information to
+   help you explore it.
+   
+   hup
+          Most RGTP clients list the index with the items that have most
+          recently been added to towards the top. Most groggers only read
+          the top few items in the index. So if you feel an item deserves
+          more discussion, you can append a reply saying "hup", which
+          will bring it to the top of the index. You can theoretically
+          hup any item (unless it's been continued), but doing so with
+          items more than a few years old is considered odd.
+          
+   grogvote
+          an annual contest to nominate groggers in various categories.
+          (The categories are also nominated by the users, but "Star of
+          GROGGS" and "Sage of GROGGS" are traditional.) The results are
+          read out every year at the [22]GROGGS garden party, which
+          happens during Cambridge May Week.
+          
+   [23]ucam.chat
+          a newsgroup internal to Cambridge University. In recent years,
+          it has taken a lot of the traffic (and traditions) which once
+          were part of GROGGS.
+          
+   grogger; grogging
+          a user of GROGGS; to use GROGGS
+          
+   GREED
+          An important RGTP-reading program; it runs under Emacs. See
+          [24]the GREED home page for more information.
+          
+   Infinity Questions (IQ)
+          A very long-running game on GROGGS. One user picks a subject
+          and the others have to ask "yes/no" questions to work out what
+          it is. Rounds can sometimes last months. New players should be
+          warned that the definition of "subject" is rather looser than
+          in many similar games: the subjects of previous rounds have
+          included: the autonomic nervous system; honesty; [25]PuTTY;
+          cork (the substance); Cambridge, Massachusetts; the hosts and
+          routers of the global Internet; Leo Blair; the London Eye; a
+          backup tape for chiark.greenend.org.uk; and the White House's
+          red encrypted telephone to the Kremlin.
+          
+   ITWSBT
+          I think we should be told
+          
+   YA(x)AICMFP
+          You are (x) and I claim my five pounds
+          
+   TIOSSUOTW(x)TIWPAO (and variants)
+          [26]This is obviously some strange usage of the word (x) that I
+          wasn't previously aware of
+          
+   SWITCH NOBOYDIE / SNB / DoeS aNyBody...
+          [27]Chris Boyd (cb113) was a user of GROGGS who would always
+          answer questions of the form "Does anyone know the way to
+          Arbury?" with "Yes". To work around this, people began writing
+          SWITCH NOBOYDIE before such questions, which soon became SNB.
+          It's also often mixed into the question itself: "DoeS aNyBody
+          know the way to Arbury?"
+          
+   spqr1
+          any Cambridge person (since this is the general form of a
+          Cambridge user id)
+          
+2.4. Finding out more
+
+   If, now you've looked around, you'd like to participate in GROGGS, all
+   you need to do is register for a GROGGS account. The link to do this
+   is given on [28]the login page, but you can go there directly if you'd
+   rather: [29]http://rgtp.thurman.org.uk/gossip/groggs/newbie. Once
+   you've filled that in, you'll get email back explaining what to do
+   next.
+   
+   If you find any problems, email the GROGGS editors; their address
+   always appears in the [30]message of the day.
+   
+3. Getting started as an administrator
+
+   (This section is a little more sketchy than I'd like. Any help would
+   be appreciated.)
+   
+3.1. Installing yarrow
+
+   There isn't (yet) any .deb or .rpm packaged version of yarrow, though
+   it's on the drawing board. Instead, you'll need to [31]download the
+   tarballs and install things yourself.
+   
+   You'll need a fairly recent version of [32]Python-- 2.1 should be good
+   enough-- and (obviously) a working web server.
+   
+   You'll also need the Python Distutils installed. Many versions of
+   Python have them installed already; I recommend, when you're following
+   the instructions here, that you assume yours does until you find it
+   doesn't. If yours turns out not to have them, you can find them in the
+   Debian package [33]python2.1-dev (or [34]python2.2-dev, depending on
+   the version of Python you're using; nothing's stopping you installing
+   both). RPM users can [35]look on rpmfind. And everyone can get them
+   from [36]the Python website.
+   
+   Unpack the tarball:
+   
+     tar xvzf yarrow-1.2.0.tar.gz
+     
+   and move into the directory it created:
+   
+     cd yarrow-1.2.0
+     
+   Now, as root, run
+   
+     make install
+     
+   If it all worked, then
+   
+     [37]http://localhost/cgi-bin/yarrow.cgi
+     
+   should be the address of a new and working RGTP server!
+   
+   Go ahead and test it by clicking on the entry for GROGGS in the menu,
+   and then the "Yes, I'm just visiting" button. The page should take a
+   good while to appear the first time, because yarrow has to download
+   the whole index for the past seven years or so-- there's about half a
+   megabyte. Fortunately, this only happens the first time you read from
+   any server: after that, it's all cached.
+   
+   Some odds and ends:
+     * If you don't have root access to the machine you're installing
+       yarrow onto, you'll have to install things more or less yourself.
+       You can tell yarrow where to find the files by modifying
+       yarrow.conf; if you have to move yarrow.conf itself, simply change
+       the definition of the variable "baseconf" in config.py.
+     * You may also like to install some other RGTP clients; there are
+       several listed on the [38]links page.
+     * If you need any help, please do email me-- I need to know how this
+       section can be improved.
+     * Note that there is no gopher support in this version. I may add it
+       back in if anyone asks for it.
+       
+3.2. Installing your own RGTP servers
+
+   This is rather more difficult. There are, as far as I know, two RGTP
+   server codebases in the world. One is the one [39]GROGGS runs on,
+   which has never been officially released. The other is one I'm
+   writing, called [40]spurge; it's been used effectively in the past,
+   but it's in no way stable enough for a production environment. I hope
+   that in the future it will be possible to use spurge to run a reliable
+   RGTP server; in the meantime, you're welcome to download it and try it
+   out. Offers of help and messages of encouragement are welcomed.
+   
+4. The future
+
+   This project has largely met its original goals: I learned a good deal
+   both about Python and about web applications, it was both challenging
+   and fun to write, and it got a good number of people interested once
+   more in GROGGS. It also sparked the imagination of others, bringing
+   forth other projects in their own right (notably [41]Vendepacx). Now
+   that all this is done, my hopes for its future are:
+     * that it will serve as an accessible method of using GROGGS for a
+       new generation of groggers
+     * that it can be packaged into .deb and .rpm form, and, perhaps,
+       become a package within the Debian project
+     * that (combined with a stable server) it can become a viable option
+       for people looking to run a small, fast and simple discussion
+       system. In diversity is strength.
+       
+5. Credits
+
+   [42]John Stark (jas11) created GROGGS. [43]Ian Jackson (iwj10) created
+   RGTP. The interface of yarrow was largely modelled after
+   [44]LiveJournal, which was created by [45]Brad Fitzpatrick. The
+   following people, in alphabetical order, have given help, advice or
+   moral support during the growth of yarrow: [46]Peter Colledge,
+   [47]Natalie Currie, [48]Martin Hardcastle, [49]Michelle Hart, [50]Neil
+   Roques, [51]Firinel Taranen, [52]Simon Tatham. Thanks to all of you.
+   There are probably more people I've left out; if one of them's you,
+   please do tell me.
+   
+yarrow
+
+   [53]Downloads
+   [54]Documentation
+   [55]Screen shots
+   [56]Links
+   [57]Contact
+   
+Get more
+
+   [58]Try it yourself
+   [59]Freshmeat
+   [60]CVS
+   [61]Home
+   
+Site
+
+   [62]valid HTML
+   [63]valid CSS
+
+References
+
+   1. http://rgtp.thurman.org.uk/yarrow/docs/index.php#introduction
+   2. http://rgtp.thurman.org.uk/yarrow/docs/index.php#user
+   3. http://rgtp.thurman.org.uk/yarrow/docs/index.php#basics
+   4. http://rgtp.thurman.org.uk/yarrow/docs/index.php#groggs
+   5. http://rgtp.thurman.org.uk/yarrow/docs/index.php#glossary
+   6. http://rgtp.thurman.org.uk/yarrow/docs/index.php#more
+   7. http://rgtp.thurman.org.uk/yarrow/docs/index.php#admin
+   8. http://rgtp.thurman.org.uk/yarrow/docs/index.php#clients
+   9. http://rgtp.thurman.org.uk/yarrow/docs/index.php#servers
+  10. http://rgtp.thurman.org.uk/yarrow/docs/index.php#future
+  11. http://rgtp.thurman.org.uk/yarrow/docs/index.php#credits
+  12. http://www.groggs.group.cam.ac.uk/groggs/
+  13. http://rgtp.thurman.org.uk/yarrow/screenshots/
+  14. http://rgtp.thurman.org.uk/yarrow/contact/
+  15. http://rgtp.thurman.org.uk/yarrow/links/
+  16. http://rgtp.thurman.org.uk/gossip
+  17. http://www.groggs.group.cam.ac.uk/cgi-bin/yarrow.cgi
+  18. http://rgtp.thurman.org.uk/gossip/groggs/browse
+  19. http://rgtp.thurman.org.uk/gossip
+  20. http://rgtp.thurman.org.uk/yarrow/screenshots/browse
+  21. http://rgtp.thurman.org.uk/yarrow/screenshots/edit
+  22. http://www.sandtreader.com/paul/groggs/springfield.html
+  23. http://www.ucam.org/chat/
+  24. http://www.chiark.greenend.org.uk/~owend/free/GREED.html
+  25. http://www.chiark.greenend.org.uk/~sgtatham/putty/
+  26. http://www.uni-oldenburg.de/fsphysik/dokumente/42/1.98/Hichhiker.html
+  27. http://homepages.ed.ac.uk/cboyd/
+  28. http://rgtp.thurman.org.uk/yarrow/screenshots/login
+  29. http://rgtp.thurman.org.uk/gossip/groggs/newbie
+  30. http://rgtp.thurman.org.uk/gossip/groggs/motd
+  31. http://rgtp.thurman.org.uk/yarrow/download/
+  32. http://www.python.org/
+  33. http://packages.debian.org/stable/interpreters/python2.1-dev.html
+  34. http://packages.debian.org/stable/interpreters/python2.2-dev.html
+  35. http://www.rpmfind.net/linux/rpm2html/search.php?query=distutils
+  36. http://www.python.org/sigs/distutils-sig/download.html
+  37. http://localhost/cgi-bin/yarrow.cgi
+  38. http://rgtp.thurman.org.uk/yarrow/links/
+  39. http://www.groggs.group.cam.ac.uk/groggs/
+  40. http://freshmeat.net/projects/spurge
+  41. http://petec.sunnynight.org.uk/rgtp/
+  42. http://homepage.ntlworld.com/slugvine/
+  43. http://www.chiark.greenend.org.uk/~ijackson/
+  44. http://www.livejournal.com/
+  45. http://www.bradfitz.com/
+  46. http://pinkstuff.publication.org.uk/~petec/
+  47. http://www.ruby.org.uk/
+  48. http://www.star.bris.ac.uk/~mjh/
+  49. http://pinkstuff.publication.org.uk/~chess/
+  50. http://pinkstuff.publication.org.uk/~neil/
+  51. http://pinkstuff.publication.org.uk/~firinel/
+  52. http://www.chiark.greenend.org.uk/~sgtatham/
+  53. http://rgtp.thurman.org.uk/yarrow/download/
+  54. http://rgtp.thurman.org.uk/yarrow/docs/
+  55. http://rgtp.thurman.org.uk/yarrow/screenshots/
+  56. http://rgtp.thurman.org.uk/yarrow/links/
+  57. http://rgtp.thurman.org.uk/yarrow/contact/
+  58. http://rgtp.thurman.org.uk/gossip/
+  59. http://freshmeat.net/projects/yarrow
+  60. http://source.publication.org.uk/yarrow/Yarrow/
+  61. http://rgtp.thurman.org.uk/yarrow/
+  62. http://validator.w3.org/check/referer
+  63. http://jigsaw.w3.org/css-validator/check/referer

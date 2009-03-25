@@ -1,7 +1,8 @@
-#!/usr/bin/python
-#
-#  FIXME: explain
-#  v0.02
+"Caching for RGTP indexes."
+
+# FIXME for this: we should check that the data in the cache is consistent.
+# At present it never times out.
+
 #
 # Copyright (c) 2002 Thomas Thurman
 # thomas@thurman.org.uk
@@ -23,11 +24,15 @@
 import shelve
 import rgtp
 import common
+import config
 
-indexes_file = '/var/lib/yarrow/indexes'
+indexes_file = config.backing_store_path('indexes')
 
 def index(name, rgtp_server):
-
+	"""Returns an index for the RGTP server |name| (where
+	|rgtp_server| is an object representing that server).
+	If possible, uses and updates the cache on backing store."""
+	
 	mutex = common.mutex('indexes.lock')
 
 	mutex.get()

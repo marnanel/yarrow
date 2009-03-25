@@ -26,7 +26,6 @@ import common
 
 ###########################################################
 
-# FIXME: Should this be called RGTPError, to fit in with naming conventions?
 class RGTPException (Exception):
 	"Houston, we have a problem."
 
@@ -35,6 +34,24 @@ class RGTPException (Exception):
 
 	def __str__(self):
 		return self.name
+
+# And all the subclasses:
+
+class RGTPTimeoutException(RGTPException):
+	"Problem due to timeouts somewhere along the line."
+	pass
+
+class RGTPUpstreamException(RGTPException):
+	"Problem with the RGTP server, as judged by us."
+	pass
+
+class RGTPServerException(RGTPException):
+	"Problem with us, possibly as judged by the RGTP server."
+	pass
+
+class RGTPAuthException(RGTPException):
+	"Authentication problems."
+	pass
 
 ###########################################################
 
@@ -58,15 +75,26 @@ class response:
 
 	def maybe_panic(self):
 		if self.numeric==481:
-			raise RGTPException("Timeout: "+self.textual)
-		elif self.numeric==484 or self.numeric==-999:
-			raise RGTPException("Server internal error: "+self.textual)
-		elif self.numeric==500 or self.numeric==510 or self.numeric==511 or self.numeric==512 or self.numeric==582:
-			raise RGTPException("Broken client: "+self.textual)
-		elif self.numeric==484:
-			raise RGTPException("Server internal error: "+self.textual)
-		elif self.numeric==530 or self.numeric==531:
-			raise RGTPException("Permission denied. (Try logging in with a privileged account?): "+self.textual)
+			raise RGTPTimeoutException("Timeout: "+self.textual)
+		elif self.numeric in (
+			484,  # general rgtp server panic
+			-999, # the panic code that yarrow assigns when
+			#       the response is so malformed we can't get a
+			#       code out of it
+			):
+			raise RGTPUpstreamException("Server internal error: "+self.textual)
+		elif self.numeric in (
+			500, # General mess-up
+			510, # Unknown command
+			511, # Wrong parameters
+			512, # Line length problems
+			582, # Dot-doubling problems
+			423, # Malformed text
+			425, # Malformed grogname
+			):
+			raise RGTPServerException("Broken client: "+self.textual)
+		elif self.numeric in (530, 531):
+			raise RGTPAuthException("Permission denied. (Try logging in with a privileged account?): "+self.textual)
 
 	def code(self):
 		return self.numeric
@@ -103,7 +131,10 @@ throws an exception if it does not."""
 
 	def __call__(self, message):
 		if message.code() != self.desideratum:
-			raise "Expected " + str(self.desideratum) + " but got " + message
+			raise "Expected %s, but got %s." % (
+				str(self.desideratum),
+				message,
+				)
 
 ###########################################################
 
@@ -409,7 +440,7 @@ class fancy:
 		self.base.send("ITEM "+id, towel)
 		return towel.result
 
-        def raise_access_level(self, target=None, user=None, password=None):
+        def raise_access_level(self, target=None, user=None, password=None, tryGuest=0):
 		# Set target==None to get as high as we can with current
 		# credentials.
                 if target==None or target > self.access_level:
@@ -420,11 +451,12 @@ class fancy:
 		                if target!=None and target > self.access_level:
 					raise RGTPException(user + " doesn't have a high enough access level.")
                         else:
-				# No username. Hmm, maybe we could try the "guest" attack...
-				# ...but this has been removed by request of Ian Jackson
-				# and Owen Dunn.
-				if target!=None:
-                                        raise RGTPException("You need to log in for that.")
+				# No username. Hmm, maybe we can try the "guest" trick.
+                                if tryGuest and (target==None or target==1) and self.access_level==0:
+                                        self.login("guest", 0)
+                                else:
+					if target!=None:
+	                                        raise RGTPException("You need to log in for that.")
 
 		# So, did it work?
                 if target > self.access_level:
@@ -633,6 +665,17 @@ Returns the changes made by an editor to an item.
                         if thing!='':
 				self.base.send(thing, dummy)
 
+	def udbm(self, command=''):
+		towel = stomach()
+		command = ('UDBM '+command).strip()
+		self.base.send(command, towel)
+		return towel.stuff
+
+	def set_motd(self):
+		"Sets the MOTD to the data you most recently sent."
+		# FIXME: should maybe return the new sequence number.
+		# not much use for it at present, though.
+		self.base.send('MOTS', expect(220))
 
 ################################################################
 

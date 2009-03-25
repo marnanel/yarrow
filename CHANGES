@@ -1,0 +1,303 @@
+Changelog
+
+v1.20
+=====
+
+1. If the browser supports it, the HTML that yarrow produces will be
+compressed.
+
+2. Fixed the config login bug: yarrow now no longer makes a connection
+to the RGTP server when producing a configuration page. If, for example,
+the server decided that the shared-secret was not the one yarrow knew
+about, the connection attempt would fail. Since yarrow would then not
+render the rest of the page, it was impossible to change the
+shared-secret to the correct one.
+
+3. A couple of enhancements for those running old or text-only browsers.
+Unread articles in the index are prefixed with a degree sign, instead of
+using the bold attribute to convey the information: some browsers don't
+display this well, especially within a hyperlink. Replies to an item are
+separated using a horizontal rule on non-CSS browsers: the solid bar of
+the title line does this on browsers which support CSS.
+
+4. The Content-Length header is set correctly, allowing the use of
+persistent connections.
+
+5. Introduced rudimentary caching support (ETags only, not yet using
+Last-Modified).
+
+6. The user can set an RGTP server's message of the day, if they have
+the correct permissions.
+
+7. The user can modify an RGTP server's user database, if they have the
+correct permissions.
+
+8. CSS is included in all HTML pages. Nowhere does yarrow now rely on static
+content from the HTTP server.
+
+9. Warnings that you need cookies added to the login pages. (Thanks to
+cgb10 for this idea.)
+
+10. Quite a bit of code tidying.
+
+11. Installation script, based on distutils. No .rpm or .deb support yet.
+
+v1.11
+=====
+
+1. Fixed a silly bug which stopped you being able to request a new account
+on an RGTP server. A couple of variable names were being sent as literal
+text.
+
+2. Something that should have been in 1.10 but didn't make the cut: the
+screen that tells you you must be logged in to read a server, and gives
+you a button to do so, is sent with HTTP 200 OK, not HTTP 403 Forbidden.
+This means that intermediate agents are less likely to stop the end user
+seeing the content and so knowing how to fix it. It also means that such
+a page can be, for example, set as the project's demonstration page on
+Freshmeat.
+
+v1.10
+=====
+
+1. A new "visitor" mode. Everyone who doesn't have a login cookie can get one
+just by pressing a button, as well as by logging in. The visitor cookie isn't
+good for much, but it gives you access to servers which allow guest login;
+see the next point.
+
+2. Automatic guest login has been reinstated if you're logged in at all, even
+if it's only as a visitor (see previous point). This was removed by request
+in v0.40, but I was far too draconian and removed it in _all_ cases, which
+effectively stopped non-groggers from reading GROGGS at all. So you can now
+browse as much as you like.
+
+3. It's now much less important where you install yarrow. Only one path
+is hard-wired (that of the configuration file) and that can be simply changed.
+All other paths are given in the configuration.
+
+4. Dates are now printed slightly more prettily: the "am/pm" is lowercase
+and without a space. Also, rgtp IDs (email addresses) are printed in
+monospace; I'm not sure I like this, but I'm experimenting with it.
+
+5. URLs containing commas are properly linkified.
+
+6. Fixed bug from v1.00: RGTP logs are printed only once. (They were being
+printed twice, once after the closing </html> tag.)
+
+7. The action of confirming the "catchup" option must be submitted by
+HTTP PUT, so that it can't easily be faked by an external link.
+
+v1.00
+=====
+
+Yep, we're finally here. Most of the changes were minor: v0.40 turned out to
+have been the last big step, as the plan was.
+
+Changes in this version:
+
+1. Ability to page through the index, instead of being shown all the several
+hundred entries on one page
+
+2. Reformat option reinstated
+
+3. Option to view the MOTD at the top of the index, or not, or only when it's
+changed
+
+4. Logging the RGTP session to screen reinstated
+
+5. HTTP errors returned on error pages
+
+6. Accepts server hostnames as well as nicknames in URLs (thanks to Peter
+Colledge for the suggestion)
+
+7. Manual written; website almost entirely rewritten too.
+
+Happy grogging... 
+
+v0.40
+=====
+
+This version has had more changes than any other version since the beginning.
+Because of this, it's been a good long while since the release of 0.31, so I
+thought a new release was about due once the code was fairly stable. Some
+of the lesser-used features have been disabled or broken, though, and some of
+the planned new features aren't yet working. I'm planning to move through
+the v0.4x releases fairly quickly as I fix these problems.
+
+This should, DV, be the last major release before v1.00.
+
+Specific new features:
+
+1. ALL STATE IS HELD ON THE SERVER. One password, which the user chooses, gets
+them access to everything. In v0.31 and before, all state was held in the
+browser, using cookies. This caused security problems (shared-secrets shouldn't
+be sent across the net more than necessary, and certainly not on every pageview),
+usability problems (the user must enter their shared-secret on every machine
+they use, possibly more often than once if it's a public machine they can't
+stay logged into) and feature problems (features that needed a lot of state,
+such as (2) below, couldn't be implemented.)
+
+2. yarrow remembers when the user last read an item, and prints the item's name
+in bold if it's new or updated since then. (However, we may have to look for
+another way of doing this: Lynx has trouble distinguishing bold and non-bold
+hyperlinked text.)
+
+3. Removed feature: earlier versions would attempt to log into servers as
+"guest" if they couldn't get in any other way. This provides public access
+to some servers (notably the Cambridge GROGGS system). However, people
+were simultaneously concerned about privacy and the intrusion of robots,
+and unwilling to remove the "guest" account for general access. So, in
+response to requests, v0.40 no longer attempts to log in as "guest"; in
+cases where it would have tried to do so before, it gives instructions
+to the user to try logging in as "guest", so that humans can follow
+instructions but robots will be foxed.
+
+4. Major code refix. All possible commands are handled by separate classes.
+(As part of this, note that there's no default page for a server any more: you
+must explicitly say "/servername/browse" or whatever. Giving no command gets
+you a list of commands. This removes feature 7 of v0.31 in the list below.)
+Much cleaning up remains to be done.
+
+5. The index is cached, so it doesn't have to transfer it from the rgtp
+server every time you request the index. On GROGGS, particularly, this has
+speeded things up a good deal, since the GROGGS index is about half a megabyte.
+This should have been done a long time ago, but it needed getting around to.
+
+6. You can specify a list of grognames and yarrow will pick one. (I'm not sure
+how useful this is, but GREED does it, so I thought I'd add it here too.)
+
+7. The message of the day is displayed at the top of the index.
+
+What's broken:
+
+1. Gopher support. If you need this, stay at v0.31. It'll be back before v1.00.
+
+2. Literal RGTP. This will probably be removed soon, unless anyone tells me
+that they actually use it. :)
+
+3. The config options to reformat, and to hide the MOTD at the top of the
+index, do nothing. This is acknowledged on the page beside their names.
+
+v0.31
+=====
+1. All code split off into a separate package, "Yarrow". yarrow.cgi contains
+only the barest code to call into this. This means things run faster, because
+they get compiled.
+
+2. The client nonce is random. (Stupidly, it was a fixed string before; that
+was put in during testing and never removed.)
+
+3. Option to view edit logs.
+
+4. Option to send literal commands to the server.
+
+5. itemids now have the TITLE attribute set in the HTML, as well as being
+hyperlinked. This means that in most browsers, mousing an itemid will show
+you the title of the item it refers to. Fake itemids are no longer made into
+hyperlinks; their titles are set to the RGTP error message returned when
+yarrow attempted to stat them.
+
+6. Message in the server-choosing screen about downloading servers made
+rather more sensible for people who don't happen to be running it on the
+same host as the spurge distribution.
+
+7. If we know your login name, the default page for a server is "browse",
+not "login".
+
+8. "log	in" rather than "log out" option appears on the "you have logged
+out" screen. (Thanks to Peter Colledge for pointing this out.)
+
+v0.30
+=====
+1. Better error handling: unavailable articles don't befuzzle yarrow; the same
+problem also used to occur with continuations of now-dead items, and that's
+fixed too. Last-ditch error handling improved; gives details of the error and
+a stack trace, rather than an Apache crash screen.
+
+2. Stupid oversight about importing a pointless and non-existent package called
+"config" fixed.
+
+3. Colour scheme simplified. (Image top right is now a .gif, ugh, but it works
+on more browsers. Maybe I should forget about transparency, though.) Plus some
+general rethinking of the UI.
+
+4. You can use spaces in shared secrets, and they'll be ignored.
+
+5. Hyperlinks with embedded itemids now work better (they don't cause HTML
+errors, but they still slice up the URL oddly. Probably acceptable now, though).
+A single @ is no longer assumed to be an email address.
+
+6. Minutes are listed in the minutes column of the index, rather than months.
+(aargh.)
+
+7. Clicking on a "Continued from..." link takes you to the _end_ of that item,
+sensibly.
+
+8. The main script has been renamed from yarrow to yarrow.cgi, because some
+people's servers were confused.
+
+9. The logging feature uses <PRE> now, and so gives you a better idea of
+what's going on (numbers of spaces are significant in many places in RGTP).
+
+10. When you save your settings it goes back to the main screen.
+
+11. You can specify the server directory in which static files (favicon.ico,
+reverse-gossip.gif, yarrow.css) are kept separately, using the "static_prefix"
+variable.
+
+v0.20
+=====
+
+1. Adds hyperlinks to the text for http, gopher, ftp and mailto URLs, email
+addresses and GROGGS itemids.
+
+2. Fixed problem with constructors which meant that yarrow crashed when you
+tried to create a new account on an RGTP server. Also cleaned up a lot of
+other stuff to do with creating new accounts which you couldn't even get to
+before, because of this.
+
+3. The general can-happen-anywhere errors quote the text sent back from the
+server to the client.
+
+4. Picks up URL prefix from the webserver, rather than having to be told
+explicitly.
+
+5. Continued items have "-- continued above" in italics instead of the author's
+name.
+
+v0.10
+=====
+
+1. Can post. Does wordwrap. (Thanks to Simon Tatham for pointing me to the
+algorithm used.)
+
+2. Handles login names less than 16 characters properly (all you spqr1@cam
+people can log in now).
+
+3. Refactored code that picks up the name, grogname and date for each reply,
+so that it works properly.
+
+4. Option to reformat text added.
+
+5. Lots of little layout changes.
+
+6. Introduction of the gopher front end.
+
+v0.02
+=====
+(initial release on Freshmeat)
+
+1. RGTP library largely rewritten for consistence in use of callbacks, rather
+than merely getting it to work.
+
+2. "Continued from" and "continued to" links in items.
+
+3. Quite a bit of code from yarrow itself moved out to the rgtp.py library.
+
+v0.01
+=====
+
+First version.
+
+
+

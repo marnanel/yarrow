@@ -1,0 +1,1227 @@
+                        REVERSE GOSSIP TRANSFER PROTOCOL
+
+                          DRAFT PROTOCOL SPECIFICATION
+
+                          August 1993 - September 1995
+                        Ian Jackson <IWJ10@phx.cam.ac.uk>
+                               Release revision 26
+
+0. CONTENTS
+
+    1  .  .  .  .  .  PREFACE and RATIONALE
+
+    2  .  .  .  .  .  PROTOCOL SYNTAX
+    2.1.  .  .  .  .  RESPONSE CODE STRUCTURE
+    2.1.1 .  .  .  .  First Digit
+    2.1.2 .  .  .  .  Second Digit
+    2.1.3 .  .  .  .  List of Response Codes
+
+    2.2.  .  .  .  .  COMMANDS and RESPONSES
+    2.2.1 .  .  .  .  Meaning of Responses Always Allowed
+    2.2.2 .  .  .  .  Banner Responses
+
+    2.2.3 .  .  .  .  USER <username> [1|2|3]
+    2.2.4 .  .  .  .  AUTH <auth-data>
+    2.2.5 .  .  .  .  ALVL [1|2|3]
+    2.2.6 .  .  .  .  MOTD
+    2.2.7 .  .  .  .  INDX [<date>]
+    2.2.8 .  .  .  .  ITEM <itemid>
+    2.2.9 .  .  .  .  STAT <itemid>
+    2.2.10.  .  .  .  DATA
+    2.2.11.  .  .  .  NEWI <subject>
+    2.2.12.  .  .  .  REPL <itemid>
+    2.2.13.  .  .  .  CONT <subject>
+    2.2.14.  .  .  .  EDLK
+    2.2.15.  .  .  .  EDUL
+    2.2.16.  .  .  .  EDIT <itemid>
+    2.2.17.  .  .  .  EDIX
+    2.2.18.  .  .  .  EDCF <reason>
+    2.2.19.  .  .  .  EDAB
+    2.2.20.  .  .  .  MOTS
+    2.2.21.  .  .  .  ELOG
+    2.2.22.  .  .  .  DIFF [<itemid>]
+    2.2.23.  .  .  .  QUIT
+    2.2.24.  .  .  .  REGU
+    2.2.25.  .  .  .  UDBM <...>
+    2.2.26.  .  .  .  NOOP
+
+    2.3.  .  .  .  .  DATA TRANSFER
+    2.4.  .  .  .  .  MD5-BASED CRYPTOGRAPHIC AUTHENTICATION PROTOCOL
+    2.5.  .  .  .  .  LENGTH and FORMATTING LIMITS
+
+    2.6.  .  .  .  .  DEVELOPER'S NOTES
+    2.6.1 .  .  .  .  Race Conditions
+    2.6.2 .  .  .  .  User Database Management
+
+    3  .  .  .  .  .  ACKNOWLEDGEMENTS
+
+
+1. PREFACE and RATIONALE
+
+Note - this is a draft document, though it is quite mature.  An implementation
+exists which aims to provide the functionality specified here.
+
+This document describes a protocol for accessing a GROGGS (General-purpose
+Reverse-Ordered Gossip Gathering System) remotely using a connection-oriented
+bytestream such as DARPA TCP/IP.
+
+It is hoped that a client-server model will facilitate the transition of GROGGS
+from its current base on Phoenix/MVS, and allow (political considerations
+permitting) access to GROGGS from any suitable clients with negligible load on
+the machine providing the central repository.
+
+It was decided to have a single central database; the effort involved in
+distributing the database was not considered worthwhile, especially considering
+that it would probably incur a server load penalty rather than benefit.
+
+The ASCII-based command-response form of the protocol was chosen as it is
+well-understood, flexible and more easily implemented in the diverse group of
+environments which might wish to support a client.  It also assists debugging.
+
+The general structure of the GROGGS message database has been found to be more
+supportive of interesting discussion than other forms (for example that found
+on USENET).  Even the Item-IDs, a source of some gripes, have not shown
+themselves to be a serious problem; it is anticipated that client software will
+provide facilities enabling a user to read GROGGS without having to type
+Item-IDs frequently.
+
+The item structure and format of the Distributed GROGGS therefore remains
+substantially unchanged from the Phoenix/MVS version.  This document does not
+describe it.
+
+The decision was made to encode some machine-readable information in the item
+text, so that it would be possible to write clients which are more selective
+about what they show to the user than Phoenix/MVS Readnew II.
+
+
+2. PROTOCOL SYNTAX
+
+This protocol may operate over any suitable transport layer.  In the case of
+DARPA TCP/IP a single TCP connection is made to the server, which should listen
+on port 1431 (5.151 as a dotted pair).  It is expected that the name or address
+of the host running the server will be widely known within its domain of
+operation.
+
+The protocol is an ASCII-based command-response protocol along the lines of
+DARPA FTP, SMTP or NNTP.  Commands are all 4 letters long, some followed by
+arguments, separated by spaces.  The command names are not case sensitive.
+
+The character set allowed in items and subjects is ISO8859-1 (the
+8-bit ASCII derivative also known as ISO Latin-1).
+
+Each line is terminated by an ASCII carriage-return followed by a linefeed.
+
+Each command generates a 3-digit response code from the server, followed by a
+space and a string containing additional information intended for the human
+user and/or the client software.
+
+There are no multi-line responses as found in SMTP or FTP.
+
+After receiving an error response a client should not repeat the same operation
+without intervention from its user; doing so would be likely to cause an
+infinite loop.
+
+Note that < and > symbols in this document are not literals - they serve to
+indicate parts of the protocol.
+
+
+2.1. RESPONSE CODE STRUCTURE
+
+Note that throughout this document text following response codes exists as an
+example only, and need not resemble that found in actual implementaions.
+
+In general, unless the form of the message following the 3 digit response code
+is specified here (and is therefore intended to be interpreted by the client),
+that message should be suitable for presentation to the user as an explanation
+of the success or failure of the operation attempted.
+
+
+2.1.1. FIRST DIGIT
+
+Each response code consists of 3 digits.  The first digit indicates the general
+type of message:
+
+     1  Informational
+     2  Success report
+     3  Partial success - more commands required to complete operation
+     4  Some kind of error occurred
+     5  Protocol error occurred - this indicates a bug in the client
+
+
+2.1.2. SECOND DIGIT
+
+The second digit specifies the context and more specific meaning of the
+message:
+
+     0  General case
+     1  Special cases for the various types of messages
+     2  Relating to an attempt to contribute or reply
+     3  Relating to access control and identification
+     5  Relating to data transfer
+     8  Connection closing - this is the last message in this session
+
+
+2.1.3. LIST of RESPONSE CODES
+
+The meaning of the 3rd digit depends on the two that precede it.  Here is a
+complete list of 3-digit codes:
+
+     100 General information intended for human consumption
+     200 General operation successful
+     500 General protocol error
+
+     119 Debugging output - not generated except after extension command
+     211 <contfrom> <contin> <last-edit> <last-reply> <subject>
+
+     410 Item does not exist
+     411 <userid> Another editor is already editing an item
+
+     510 Command unknown
+     511 Parameter syntax incorrect
+     512 Low-level protocol error (transmitted line too long)
+
+     120 <submitteditemid>                  Gives itemid of the item submitted
+     122 <contin> <last-edit> <last-reply>  Gives info about continuation item
+
+     220 <sequence>    New item, reply or continuation successfully submitted
+
+     421 Item is full - reply would not fit
+     422 Item has (already) been continued
+     423 Submission's text was malformatted
+     424 Submission's Subject (or edit reason) was malformatted
+     425 Submission's grogname was malformatted
+
+     520 Attempt to continue an item without previously having received a 421
+
+     230 Welcome message, but no access allowed until login
+     231 Welcome/login successful - read-only access allowed
+     232 Welcome/login successful - normal access allowed
+     233 Welcome/login successful - editorial access allowed
+     432 Access denied
+
+     330 <algorithm> Userid accepted, confirm identity, you challenge me
+     130 <algorithm> Userid accepted, confirm identity, auth data follows
+     333 <auth-data>                       Auth data, now it's your turn
+     133 <auth-data>                       Auth data, real response follows
+     433 Access denied due to auth failure
+
+     531 Attempt was made to ignore restriction in 230/231/232 message
+     532 Attempt was made to EDIT/EDIX without previous EDLK.
+
+     150 Please send data now
+     250 Data follows
+     350 Data received now you must do something with it
+     550 Posting only possible if you have sent some data
+
+     280 Closing at your request
+
+     481 Closing due to timeout - you may reconnect
+     482 Access denied
+     483 Access denied due to auth failure
+     484 Server internal error
+
+     582 Severe protocol violation makes continuation impossible
+
+
+2.2. COMMANDS and RESPONSES
+
+Here follows a list of the commands which a server must implement, with an
+explanation of the parameter syntax and responses which may be returned by the
+server.
+
+A server may implement additional (extension) commands; if it does so they
+should, in so far as is reasonable, generate the response codes listed above.
+
+
+2.2.1. MEANING of RESPONSES ALWAYS ALLOWED
+
+The following responses may occur if appropriate after any command or
+in the initial connection banner:
+
+     481 Closing due to timeout
+        The server may decide to close a connection after a certain period of
+        inactivity.  If it does so it should send an unprompted 481 response
+        and close the connection.  The client will then interpret this as the
+        response to its next command, when it issues it.  The client is
+        expected to reconnect, restore any state associated with the connection
+        (for example, log in or send DATA) and reissue the command.
+
+        If such a timeout is enforced the timeout period must be at least 10
+        seconds; it is recommended that it be much longer (several minutes).
+
+     484 Server internal error
+        Due to severe internal problems the server is shutting down the
+        connection.  The client should probably not attempt to reconnect
+        without intervention by the user; it should certainly not repeat the
+        attempt at the operation that caused the error.
+
+     500 General protocol error
+        The client issued a command in violation of the protocol.
+
+     510 Unknown command
+        The client issued a command unknown to the server.
+
+     511 Parameter syntax error
+        The client issued a command whose parameters violated the protocol.
+
+     512 Low-level protocol error
+        The client sent a line whose length exceeded the maximum specified
+        in section 2.5.
+
+     582 Severe protocol violation
+        The client made an error when doing the dot-doubling described in 2.3.
+        This may make it difficult for the server to recover to a known
+        protocol state; it may then choose to issue a 582 response and close
+        the connection.
+
+
+2.2.2. BANNER RESPONSES
+
+Upon initial connection the server will issue a banner message, which will have
+one of the codes listed below (or in 2.2.1):
+
+     230 Server ready - you must log in
+     231 Server ready - read-only access permitted
+        The server is ready to accept a command, and has decided to allow the
+        client the access specified.  If the client wishes a greater level of
+        access it should identify itself using a USER command.  In particular,
+        a USER command is necessary to gain posting access, so that the server
+        may discover which userid the client wishes to use.
+
+     482 Access denied
+        The server has decided not to allow access to that client.
+
+
+2.2.3. USER <username> [1|2|3]
+
+The client informs the server that it is operating on behalf of the user
+<username>.  A valid username is constructed:
+        <username>      :=      alphanum alphanum* [ '@' non-whitespace* ]
+but is limited in length.  It is intended to be useable as an email address;
+if it contains a `.' it should be the FQDN (tough luck if it doesn't fit!),
+otherwise the domain name of the organisation served should be appended.  This
+domain name is expected to be widely known.
+
+The client may only issue one USER command during a session.  Userids
+are case-insensitive after the @ sign if one is present, but case
+sensitive before.
+
+A single user may have different authentication details for different access
+levels.  The trailing digit on the USER command, 1, 2 or 3, refers to one of
+these different access levels (see below).
+
+If no level is specified when several are available, or a level is specified
+which is not associated with the account, the server may interpret the request
+to refer to a level of its choosing, or may summarily deny it.
+
+It is expected that some knowledge about the server's access control policies
+will be shared with the administrators of clients.
+
+In the responses below, <algorithm> refers to one of a set of cryptographic
+identification and authentication procedures.  <algorithm> is of the form:
+       <algorithm>     :=      alphanum alphanum*
+Currently the only algorithm allowed is `MD5'; the messages that make it up are
+described in section 2.4.
+
+     482 Access denied
+        The server has no knowledge of that user or that user is not allowed to
+        access the server.  If the USER was issued following a REGU command,
+        this indicates that the server has chosen to disallow the registration.
+
+     231 Login OK, read only
+     232 Login OK, normal access
+     233 Login OK, editorial access
+        The server allows access without further in-band authentication.
+
+        Note that the client should know whether the server will be requiring
+        authentication.  This is because the cryptographic challenge-response
+        procedure is required to authenticate the server to the client as well
+        as the client to the server.  If a client was expecting an
+        authentication challenge and didn't get one it should become
+        suspicious, and should probably refuse to continue.
+
+     130 <algorithm>  Prove it.
+     333 <auth-data>
+        The server requires a cryptographic authentication, using algorithm
+        <algorithm>, which specifies that the first exchange of cryptographic
+        data is from server to client.  The authentication data (for example, a
+        challenge) is transferred.  Depending on the algorithm, the client will
+        be expected to perform zero or more AUTH commands.
+
+     330 <algorithm>  Prove it.
+        The server requires a cryptographic authentication, using algorithm
+        <algorithm>, which specifies that the first exchange of authentication
+        data (for example, a challenge) is from client to server.  Depending on
+        the algorithm, the client will be expected to perform one or more AUTH
+        commands.
+
+     280 OK, will send you email
+        This response will only occur if the USER was issued after a REGU
+        command.  It indicates that the server has recorded the client's
+        claimed address and is sending the registration message to it as
+        described in 2.2.24.  The user should await the email and follow the
+        instructions contained in it.
+
+
+2.2.4. AUTH <auth-data>
+
+The client transfers some authentication data to the server.
+
+All authentication data are sent (both by client and server) as contiguous
+strings of hex digits, each pair representing one byte in the message (most
+significant nybble first).  Sometimes the data may be broken into several
+distinct pieces, in which case spaces are used to separate them.  The hex may
+be in upper or lower case.
+
+The exact meaning of <auth-data> and the response expected from the server
+depends on the authentication algorithm in use.
+
+     130 <auth-data>
+        The server has some authentication data to send back.  This message
+        will be followed by another 130 (any number of 130's may be used,
+        depending on the algorithm) or one of the other possible replies:
+
+     333 <auth-data>
+        The server has some authentication data to send back.  After this
+        athentication will still not be complete; the server expects one or
+        more AUTH commands still to be issued.
+
+     231 Identity verified, read access allowed
+     232 Identity verified, write access allowed
+     233 Identity verified, edit access allowed
+        The server has checked the authentication data supplied by the client
+        and accepted it, granting the appropriate level of access.
+
+     432 Identity verified, but userid disabled
+     482 Identity verified, but userid disabled
+        The server has checked the authentication data supplied by the client
+        and accepted it, however the userid in question has been disabled by
+        the Editors.
+
+     433 Authentication data did not match
+     483 Authentication data did not match
+        The server has checked the client's authentication calculation
+        and found it to be incorrect.  This event should usually be logged
+        by the server.
+
+In both cases of failed authentication, if the authentication was
+prompted by a USER command the server will issue 483 and close the
+connection; if it was prompted by an ALVL it will issue 433 and remain
+at the old access level.
+
+2.2.5. ALVL [1|2|3]
+
+Requests that the server change the access level at which this session is
+operating (see the USER command).
+
+If the access level is to be changed upwards the server should require the same
+authentication as would have been necessary to reach the new level directly
+with the USER command (even if the higher level has previously been held during
+the life of the current connection).
+
+If it is to be changed downwards (or if the existing level is requested) the
+server may not require any authentication.
+
+The same rules about levels which are not associated with the account and
+unspecified levels apply here as with the USER command (though the server's
+policy for example about unspecified levels is likely to be different).
+
+     231 Change OK, read only
+     232 Change OK, normal access
+     233 Change OK, editorial access
+
+     130 <algorithm>  Prove it.
+     333 <auth-data>
+
+     330 <algorithm>  Prove it.
+
+        All the above responses have the same meaning as after USER.
+
+     432 Access denied
+        The server denies the request immediately.
+
+
+2.2.6. MOTD
+
+Requests the Message of the Day.
+
+     250 Message of the Day follows
+        The server sends the Message of the Day, in the standard data format
+        (see 2.3 below).  The first line consists of a dateline in the format
+                <last-change> <timestamp>
+        where last-change is 8 hex digits representing the global sequence
+        number of the last change to the message, and timestamp is the
+        corresponding time, as recorded in the Index.  Note the space between
+        these two pieces of information.
+
+        As with the ITEM command, the data returned is ^-doubled.  Note,
+        however, that no magic cookies will appear in the Message of the Day.
+
+     410 There is no Message of the Day
+        The server does not currently have a message of the day.
+
+
+2.2.7. INDX [<date>]
+
+Requests all the index entries at or since <date>, which may be:
+   - 8 hex digits: it represents a time, measured as the number of seconds
+     since 1st January 1970 GMT, according to by the server's clock and stored
+     in the index entries;
+   - A # (hash) sign followed by 8 hex digits: it represents a global
+     sequence number.
+
+In the latter two cases data that matches the date restriction exactly will
+be returned.  If <date> is omitted the entire index is requested.
+
+     250 Index follows
+        The server sends the index data, in the standard data format (see
+        2.3 below).
+
+        Each line is a single index entry of fixed length, with the following
+        fields separated by spaces and padded to the lengths shown:
+
+        Length      Description
+        ---------   ----------------------------------------------------------
+         8          Global sequence number (8 hex digits)
+         8          Hex number of seconds (GMT) as measured by the server.
+         8          Item-ID
+        75          Userid of contributor
+         1          Type code - see below
+        Remainder   Subject of the item in question
+
+        The Subject is padded with spaces to fill the size of an index entry
+        (see section 2.5); if it is too long the last three characters in the
+        index are changed to `...'.
+
+        The entries are in increasing order of date and sequence number
+        (as stored in the index).  Sequence numbers are unique and increasing,
+        however they will wrap around when the maximum 4-byte unsigned integer
+        is reached.  Clients are expected to handle this correctly.  Sequence
+        numbers are not required to be densely allocated, however no more than
+        half the range should be used by a server within a few months, so that
+        the order is well defined.
+        
+
+        The type code is one of the following:
+           R    Reply
+           I    New item
+           C    Continuation of another item
+           F    Item has been continued
+           E    Item edited
+           M    Message of the Day updated
+
+        In each case the index entry contains the Subject line of the item as
+        it was when the entry was made (or as modified by any editorial
+        modifications to the Index).  When an item is continued using the CONT
+        command two index entries are made - a `C' entry for the continuation
+        item, followed immediately by an `F' entry for the old, continued item.
+        Both entries have in this case the same sequence number.
+
+        A Message of the Day update has empty Item-ID and Subject
+        fields in the index - i.e., strings of spaces.
+
+     531 Read access denied.
+        The client attempted to ignore an earlier 230 response.
+
+2.2.8. ITEM <itemid>
+
+Requests that the the item be sent.  The itemid is formatted as on Phoenix/MVS
+GROGGS (i.e., one letter indicating the year followed by 3 digits for the day
+and 4 for the time).  It is case-insensitive.
+
+Note that the server may allocate itemids in advance of the current time if
+required to avoid clashing; it may also have clock skew with respect to the
+client.  The client should not therefore compare the time implied by an itemid
+with its own idea of what the time is or with times shown in the index.  The
+server may also sometimes allocate itemids out of numerical order.
+
+Item-IDs will however always represent `valid' times, though they may be in
+Greenwich Mean Time or in the server's local time with any daylight saving
+adjustment removed.
+
+     250 Item follows
+        The server sends the item.  The first line of the returned item has the
+        format
+                <continued-from> <continued-in> <last-edit> <last-reply>
+        where each of <continued-from> and <continued-in> is an item-ID or an
+        equivalent length string of spaces.  <last-edit> and <last-reply> are
+        the global sequence numbers (8 digits hex) of the last time this item
+        was edited or replied to, respectively, or a series of spaces if it has
+        not.  Note the space between the components.  The initial contribution
+        counts as a reply for this purpose.
+
+        The item is sent as described in 2.3.  However, additionally, the
+        initial contribution (starting with "Item") and each reply to the item
+        (starting with a "Reply" dateline) is preceded by a "magic cookie", in
+        the format
+                ^<global-sequence> <timestamp>
+        where ^ is a literal caret character, and <global-sequence> and
+        <timestamp> are both 8 digits of hex.  Note the space.
+
+        In order to distinguish a "magic cookie" from another line starting
+        with a caret, any lines in the text of the contribution or a reply
+        which start with a ^ will have an additional ^ prepended.  The client
+        should remove this before presentation to the user.
+
+     410 Item does not exist or has been archived
+
+     531 Read access denied.
+        The client attempted to ignore an earlier 230 response.
+
+
+2.2.9. STAT <itemid>
+
+Requests information concerning the item.
+
+     211 <contfrom> <contin> <last-edit> <last-reply> <subject>
+        The item was continued from item <contfrom> and is continued in item
+        <contin>; its last edit had sequence number <last-edit> (8 bytes hex),
+        and the last reply (or, failing that, the contribution itself) had
+        sequence number <last-reply>.  If any of these does not apply a string
+        of spaces of the appropriate length is sent in its stead.
+
+        These four pieces of information are followed by the subject of the
+        item.  Note the presence of spaces separating the parts of the
+        response.
+
+     410 Item does not exist or has been archived
+
+     531 Read access denied.
+        The client attempted to ignore an earlier 230 response.
+
+
+2.2.10. DATA
+
+Requests that the server take receipt of piece of data, for use in a subsequent
+reply or contribution.
+
+The first line of the data is the grogname to be used; the subsequent lines are
+the text of the reply.
+
+     531 Posting access denied.
+        The client attempted to ignore an earlier 230 or 231 response.
+
+     150 Send data terminated by `.'
+        The server is willing to accept the data.  The client should send the
+        data in the standard format (2.3).
+
+        If the data is a resubmission of an edited item, the data should be
+        presented to the server with the "magic cookies" intact, and the ^
+        characters doubled to distinguish them from the start of magic cookies
+        (see 2.2.8).  If the data is a new item or contribution or a new
+        Message of the Day it should not contain such cookies and should not be
+        ^-doubled - the server should ensure that any such processing required
+        takes place at some point before the item data is returned to a client.
+
+        The server will then respond with one of the following:
+
+     350 Data received
+        The data was stored and received successfully.  It will be retained
+        until a command is given that successfully uses it, or an unexpected
+        response code (one of those in 2.2.1, above) is received, unless more
+        specifically stated otherwise elsewhere in this document.
+
+     423 Malformed text
+     425 Malformed grogname
+        The data was malformed in some way.  Perhaps the grogname or one of the
+        text lines was too long, or the data itself was too long.  The reason
+        (intended for the user's consumption) is in the textual portion of the
+        response; the final digit of the response code indicates which portion
+        of the submission the user should modify to have the it accepted.
+
+
+2.2.11. NEWI <subject>
+
+Requests that the previously sent data (using the DATA command) be submitted as
+a new item.  The subject of the new item is taken from the command line.
+
+Any opportunity to CONT is destroyed by a successful NEWI.
+
+     120 <itemid>               ... followed by ...
+     220 <sequence>  OK, posted
+        The item was posted successfully, and given the itemid shown.
+        An index entry was created, with sequence number as given.
+
+     424 Malformed subject
+        The subject line was unsuitable for posting.  The reason (intended for
+        the user's consumption) is specified.
+
+     423 Malformed text
+     425 Malformed grogname
+        There was something wrong with the text or grogname that was only
+        detected now.  See DATA command for details of these responses.
+
+
+2.2.12. REPL <itemid>
+
+Requests that the previously sent data be submitted as a reply to the item
+specified.
+
+Any opportunity to CONT is destroyed by a successful REPL.
+
+     220 <sequence>  OK, posted
+        The reply was posted successfully and an entry added to the index,
+        with sequence number shown.
+
+     410 Item does not exist or has been archived.
+
+     421 Item is full
+        The item plus the reply would exceed the maximum length for an item.
+        If the user desires, the client may (after having received this
+        response) use the CONT command to submit a continuation.  This
+        opportunity exists until a command is issued which destroys it - such
+        commands are noted as such in their descriptions.
+
+        Note that the client may, but need not, use the DATA command on the
+        behalf of the user to submit a revised reply for the continuation;
+        alternatively the user may wish to attempt to trim the reply down, in
+        which case the client should issue another DATA and retry the REPL.
+
+     122 <continued-in> <last-edit> <last-reply>  ... followed by ...
+     422 Item is continued
+        The item has already gone into a continuation.  The client is advised
+        to give the user the opportunity to submit the reply to the
+        continuation item.  See the 211 response to the STAT command for
+        details of the meaning of the information in the 122 reply.
+
+     423 Malformed text
+     425 Malformed grogname
+        There was something wrong with the text or grogname that was only
+        detected now.  See DATA command for details of these responses.
+
+
+2.2.13. CONT <subject>
+
+Requests that a reply previously rejected because the item was full (response
+code 421) be submitted as a continuation item.  The ID of the item to be
+continued is remembered by the server since the failed REPL.  The subject line
+of the new item is taken from the command.
+
+The user should be discouraged from putting the ID of the item being continued
+in the subject line, as this information is available in the header line
+returned by the ITEM command, unlike the situation in Phoenix/MVS GROGGS.
+
+     120 <continued-in>         ... followed by ...
+     220 <sequence>  OK, posted
+        The continuation was submitted successfully and the index updated,
+        adding entries with sequence number <sequence>.  The continued item has
+        a continuation marker appended, which consists of a magic cookie giving
+        the sequence number followed by a human-readable note saying the item
+        has been continued.  Note that the last-replied sequence number of the
+        old (full) item is *not* updated.
+
+        Successful use of the CONT command uses up the opportunity to CONT.
+
+     122 <continued-in> <last-edit> <last-reply>  ... followed by ...
+     422 Item already continued
+        Another user has continued the item since the original attempt by this
+        client to REPL.  The client is advised to allow the user to edit the
+        reply and to submit it to the continuation item.
+
+     410 Item does not exist
+        The item has been withdrawn, been archived or otherwise ceased to exist
+        since the original attempt by this client to REPL.
+
+     423 Malformed text
+     425 Malformed grogname
+        There was something wrong with the text or grogname that was only
+        detected now.  See DATA command for details of these responses.
+
+     520 No preceding REPL / 421
+        No preceding REPL failed with code 421, or a more recent command has
+        destroyed the opportunity to CONT.  This opportunity can be reacquired
+        by reattempting the REPL.
+
+
+2.2.14. EDLK
+
+This locks the message area against simultaneous editing.  It is mandatory to
+issue an EDLK before commencing any editing operation.
+
+The client should later issue an EDUL command.  If the client disconnects
+before doing so, or uses QUIT, or suffers a disconnection due to timeout, any
+lock it held will be removed.
+
+While a client has locked the message area using EDLK the timeout period, if
+one exists, shall be at least the length of time determined by the server
+administrator to be sufficient for the editorial user to edit the item(s) as
+desired and commit their changes.  This should be at least 5 minutes.
+
+Ordinary reading and posting activities shall not be prevented by an
+outstanding edit lock.
+
+     200 Message area locked
+
+     411 <userid> Another editor is editing an item or the index
+        Another editor has sent an EDLK without a following EDUL.  It is not
+        possible for more than one edit to be in progress simultaneously.  The
+        client is advised to inform the user so that the user may try again in
+        a few minutes when the edit has been completed.  Note that the <userid>
+        of the other editor is advisory only; race conditions may exist which
+        will cause it to be inaccurate.
+
+     531 Edit access denied.
+        The client attempted to ignore an earlier 230, 231 or 232 response.
+
+
+2.2.15. EDUL
+
+This unlocks the message area, reversing the effect of any previous EDLK.
+
+     200 Message area unlocked
+
+     500 Edit operation still in progress
+        An EDIT or EDIX is outstanding; EDAB or EDCF must be used
+        before unlocking the message area.
+
+     532 Message area not locked
+        The client attempted EDUL without any precedng EDLK.
+
+
+2.2.16. EDIT <itemid>
+
+Requests that the item be edited.  The message area must have been locked
+against simultaneous editing using EDLK.  The item's content is returned as
+for ITEM.  The client should later issue (optionally) DATA followed by EDCF, or
+use EDAB to abort the edit.
+
+The client may not issue another EDIT or EDIX without confirming or aborting
+the first one, nor may it contribute or reply to items.
+
+The EDIT command discards any DATA previously submitted.  Any opportunity
+to CONT is destroyed by EDIT.
+
+     250 Data follows
+        The content of the item is transmitted in the same format as by the
+        ITEM command.
+
+     410 Item does not exist or has been archived
+
+     532 Message area not locked
+        The client attempted EDIT without a previous EDLK.
+
+
+2.2.17. EDIX
+
+Requests that the index be edited.  The message area must have been locked
+against simultaneous editing using EDLK.  The contents of the index are
+returned as for INDX.  The client should later issue DATA followed by EDCF, or
+use EDAB to abort the edit.
+
+The client may not issue another EDIT or EDIX without confirming or aborting
+the first one, nor may it contribute or reply to items.
+
+The EDIX command discards any DATA previously submitted.  Any opportunity
+to CONT is destroyed by EDIX.
+
+     250 Data follows
+        The contents of the index is transmitted in the same format as by the
+        INDX command.
+
+     532 Message area not locked
+        The client attempted EDIX without a previous EDLK.
+
+
+2.2.18. EDCF <reason>
+
+Confirms an editing operation started by EDIT or EDIX.
+
+In the case of an ordinary item modification the client should previously have
+sent a DATA command specifying the full replacement text for the text sent by
+the EDIT command.  The first line of the DATA (where the grogname would usually
+appear) is ignored; this is where the continued-from/continued-in itemids were
+when the item was retrieved with EDIT.
+
+The server will check the data for sanity, and replace the item with the text
+submitted.  If the item has been replied to or continued since the edit started
+the new replies and/or continuation marks are merged into the edited text.
+Editing may take an item over the usual item size limit.
+
+If, however, the client has not submitted any DATA since the initial EDIT the
+item specified in the EDIT command is withdrawn and all the index entries
+relating to it are removed (this does not leave any traces in the index's edit
+differences log, available with DIFF, unlike using EDIX).
+
+In the case of an index edit the client should have previously sent a DATA
+command specifying the replacement index data for the data sent by the EDIX
+command.  This should be in the same format as returned by the INDX command,
+except that lines need not be padded with spaces to the length of an index
+entry - the server is required to pad short lines itself.
+
+Each use of EDCF is logged together with the reason given and whether the
+command was an edit or a withdrawal.  These logs may be inspected by the use of
+the ELOG command.
+
+The edit (in the form of a difference listing in the case of a change to an
+item or the index, or the complete text of the item in the case of a withdrawn
+item) is stored in the server where it may be inspected by manual access to the
+server's file area.
+
+Note that this does not of itself unlock the lock on the message area acquired
+by EDLK; a separate EDUL command is required.
+
+     220 <sequence> Item or index successfully edited or withdrawn
+        In the case of an ordinary item edit an entry is also appended to the
+        index, with sequence number <sequence>.  In the case of an index edit
+        or item withdrawal the sequence number may be ommitted and replaced
+        with a series of 8 spaces.
+
+     410 Item has disappeared since the initial EDIT
+        This probably means that it was found to be old and has been
+        archived.  The EDIT is cancelled and the DATA discarded.
+
+     423 Malformed text (or header)
+        The item text didn't match the server's criteria or the item header of
+        the submitted replacement item did not start with "Item " or did not
+        have a "Subject: " line in the first 3 lines. In the case of an index
+        edit, may occur if the replacement index contained a line which was not
+        correctly formatted.
+
+        This error may also be detected and reported at the DATA transfer
+        stage.
+
+        The EDIT remains outstanding but the DATA is discarded.  The reason,
+        intended for the user's consumption, is specified.
+
+     424 Malformed reason
+        The reason given was too long or was unacceptable for some other
+        reason.  The EDIT and DATA remain outstanding.  The reason,
+        intended for the user's consumption, is specified.
+
+     500 No edit is currently in progress.
+
+2.2.19. EDAB
+
+Aborts an editing operation started by EDIT.  Any DATA sent is discarded.
+
+Note that this does not of itself unlock the lock on the message area acquired
+by EDLK; a separate EDUL command is required.
+
+     200 Edit operation aborted
+
+     500 No edit is currently in progress.
+
+2.2.20. MOTS
+
+Sets the Message of the Day to the data submitted using DATA.  Editorial access
+is required for this command.
+
+The DATA submitted must not yet have been ^-doubled (see 2.2.8), and it cannot
+therefore contain any magic cookies.  The first line of the submitted DATA
+(where the grogname would be in a contribution or reply) is ignored.  This is
+so that an implementation can decide whether to ^-double the data and decide
+what to do with the first line when the data is received, rather than when it
+is used.
+
+     220 <sequence>  Message of the Day updated
+        The submitted DATA has been transferred to the Message of the Day.
+        The index is updated appropriately, using the sequence number shown.
+
+     423 Malformed text
+        The server rejected the format of the text.  This error may also be
+        detected at the DATA transfer stage.
+
+     531 Edit access denied.
+        The client attempted to ignore an earlier 230, 231 or 232 response.
+
+
+2.2.21. ELOG
+
+Retrieves the edit log.
+
+     250 Edit log follows
+        The edit log is sent, as is.  It does not contain the text of any edits
+        made, but it does specify the item, userid, date and time and the
+        reason specified during the EDCF, for each recent edit or withdrawal.
+        Old edits are removed from the log by processes internal to the server
+        after some time specified by the administrator.
+
+        The edit log is sent in the standard data format described in 2.3.
+
+     531 Read access denied.
+        The client attempted to ignore an earlier 230 response.
+
+
+2.2.22. DIFF [<itemid>]
+
+Requests that any edits made to the item (if specified) or the index (if none
+is specified) be sent.
+
+This is formatted as a series of Unified Context Diffs, as produced by the GNU
+diff program.  The header which usually gives the filenames of the files being
+compared will look like this
+ --- <item-id> Before <global-sequence> <timestamp>
+ +++ <item-id> Withdrawn <date-and-time>
+or
+ --- <item-id> Before <global-sequence> <timestamp>
+ +++ <item-id> Edited <date-and-time>
+or
+ --- index Before <global-sequence> <timestamp>
+ +++ index Edited <date-and-time>
+where <date-and-time> is a human readable date as found in item headers.
+<global-sequence> is the sequence number in the index of the edit in question
+and <timestamp> is its timestamp, both as 8 digits of hex.
+
+The diffs will be in the `forward' direction, giving a patch which when applied
+to the version before the edit would have produced the version after the edit.
+
+Where an item has been withdrawn this is recorded as the differences between
+the item's contents and an empty file, and the changes to the index are also
+recorded and can be retrieved along with other edits of the index.
+
+     250 Diffs follow
+
+     410 No edits available
+        The item does not exist or has not been edited, or the item and any
+        edits have been archived.
+
+     531 Edit access denied.
+        The client attempted to ignore an earlier 230, 231 or 232 response.
+        Only users with Edit access may view the substance of edits.
+
+
+2.2.23. QUIT
+
+Requests that the server close the connection.
+
+Any data stored by the server following a DATA command is discarded, and any
+EDIT operation in progress is aborted.
+
+     280 OK, goodbye
+        This message is sent by the server just before it closes its end of the
+        transport connection.
+
+
+2.2.24. REGU
+
+Requests the initiation of the new user registration procedure.  This command
+sends back as data a warning message.  Lines starting with a space should be
+displayed to the user.  Lines not starting with a space provide additional
+information for a person driving the server manually, informing them how to
+abort the registration operation and what command will continue it.  The client
+should discard these lines, but must instead make the user aware of how to
+instruct the client to perform these operations.
+
+If the user decides to abort the registration the client should issue a QUIT
+command.  If further interaction with the server is required a new connection
+must be established.
+
+Should the user decide to go ahead with the registration the client should send
+a USER command with the new userid to be created.  The client must allow the
+user to view the userid it is about to send to the server, and is advised to
+allow the user to edit it, before going ahead with the confirmation.
+
+The server will then send the user an electronic mail message (at the address
+specified by the userid) which will provide the user with their shared secret
+for the identity confirmation protocol.  It will give the user instructions as
+to how to operate a client capable of checking this information and storing it
+on the client system, so that it can subsequently be found without requiring
+user intervention.
+
+The REGU command may only be issued before the client has identified the user
+with the USER command.
+
+     100 Please stand by
+        Indicates that the server has received and is acting on the REGU
+        command, and that a full response will be issued shortly.  The client
+        is advised to show the message to the user.  This message is always
+        followed by one of the following two (or one of the messages listed in
+        2.2.1).
+
+     250 Do not issue a USER command without reading this message
+        This response is followed by the warning message in the standard data
+        format (see 2.3).  This response may occur with or without a preceding
+        response with code 100.
+
+     482 Access denied
+        The server has decided not to permit registration by that client.  This
+        response may occur with or without a preceding response with code 100.
+
+
+2.2.25. UDBM <implementation defined strings>
+
+Performs user database management functions.  The meaning of the rest of the
+line is implementation defined.
+
+     250 Messages follow
+        Data follows transmitted by the standard means described in 2.3.
+        The structure and meaning of this data is implementation defined.
+
+     531 User database access denied.
+        The client attempted to ignore an earlier 230, 231 or 232 response.
+        Only users with Edit access may access the user database.
+
+
+2.2.26. NOOP
+
+Does nothing, other than exercise the connection.  This may be used, for
+example, by a client which wishes to test whether the server is still present.
+
+Note that a client is explicitly forbidden from repeatedly issuing the NOOP
+command (without user intervention) in order to defeat an inactivity timeout
+imposed by the server.  Other similar strategies are also forbidden.
+
+     200 NOOP successful
+
+
+2.3. DATA TRANSFER
+
+Transfer of data (text) between the client and the server is accomplished using
+the traditional SMTP and NNTP dot-doubling algorithm.
+
+The text is transmitted line-by-line.  Each line which starts with a full stop
+has an additional full stop prepended; this is removed by the receiver.
+
+The text is terminated by the transmission of a dot on a line by itself.
+
+If the client finds itself unable to continue the data transmission for any
+reason it should send the `.' terminating the data and then fail to issue a
+command instructing the server to use the data.  It may issue another DATA
+command at a later time if it wishes to attempt transfer of the same or some
+other data.
+
+If the server finds itself unable to continue the data transmission it should
+not send the `.' termination line, as this would be interpreted by the client
+as the end of a successful transfer.  Instead it should close the transport
+layer connection.  Before doing so it is recommended that it send a single line
+error message; the client is advised to show the last line received before such
+a closed connection to the user with an indication that it may, but need not,
+indicate the reason for the failure.
+
+
+2.4 MD5-BASED CRYPTOGRAPHIC AUTHENTICATION PROTOCOL
+
+The MD5-based cryptographic authentication proceeds as follows:
+   client: USER <username> [1|2|3]  or  ALVL [1|2|3]
+   server: 130 MD5  Prove it.
+           333 <server-nonce>
+   client: AUTH <client-hash> <client-nonce>   or QUIT
+   server: 133 <server-hash>                   or 433/483
+           231 OK.
+
+<server-nonce> is a 16-byte nonce invented by the server.
+<client-nonce> is a 16-byte nonce invented by the client.
+
+All the cryptographic strings should be processed as binary data.  However, as
+described in 2.2.4, in order to transmit the data through text-oriented RGTP
+all the byte-strings are encoded in hex: each byte is encoded into two hex
+digits - first the top nybble and then the bottom nybble.  The resulting pairs
+of hex digits are concatenated in the order of the original bytes.  Clients and
+servers must accept and may generate hex in either upper or lower case.
+
+<server-hash> is the MD5 message digest of a message consisting of:
+                <server-nonce>          (16 bytes)
+                <client-nonce>          (16 bytes)
+                <userid>                (16 bytes)
+                <shared-secret>         (n bytes)
+where <userid> consists of the first 16 characters of the userid in ASCII.  Any
+letters after the @ are in lowercase.  If the userid is less than 16 characters
+it is padded with nulls.
+
+<client-hash> is the MD5 message digest of a message consisting of:
+                <client-nonce>          (16 bytes)
+                <server-nonce>          (16 bytes)
+                <userid>                (16 bytes)
+                <~shared-secret>        (n bytes)
+where <~shared-secret> is the bitwise inversion of <shared-secret>.
+
+The <shared-secret> is a variable length key which is distributed by external
+means (for example, email following a REGU, USER registration procedure; see
+2.2.24).  Each user may have a different key.  n is the length of the shared
+secret.
+
+The server should check the client's hash calculation before providing its own;
+if it finds a mismatch it should log the event and issue a 433 or 483 message
+as appropriate.
+
+The client should check the server's hash calculation before continuing to use
+the connection.  If it finds a mismatch it should issue a QUIT command and
+notify the user that the server has been taken over.
+
+The nonces are there to prevent replay attacks.  They need not be
+unpredictable, but they do need to be unique.  If one party to the protocol
+reuses old nonces an attacker can `play back' previously intercepted replies
+(from old sessions, or from other sessions which are being observed
+simultaneously by the attacker) thus fooling the unwise party into thinking
+that the other end is really present.  A good nonce will probably include the
+time as well as various other information that is available.
+
+
+2.5. LENGTH and FORMATTING LIMITS
+
+The following limits are enforced by the server:
+
+    Maximum length of a userid                         75
+    Maximum length of a text line in an item           80
+    Maximum length of a transmitted/received line     300
+    Length of an index entry                          199
+
+(all lengths are in characters and do not include the carriage return and
+linefeed which are transmitted at the end of each line.)
+
+The server will also impose implementation-defined limits on the maximum length
+of a grogname, an item's subject, an initial contribution, a single reply and
+an item; violation of these limits will be signaled by the use of a 423/424/425
+response code and described in the textual portion of the response.  These
+limits are a matter of policy; one might expect them to be measured in
+kilobytes or perhaps tens of kilobytes.
+
+It is expected that the maximum allowable length of a subject will be the
+maximum length of a text line minus 9 characters (the length of "Subject: ").
+
+It is expected that the maximum allowable length of a grogname will be the
+maximum length of a text line minus 5 characters (the length of "From ").
+
+The server may impose limits on the characters appearing in and format of a
+user's contribution or reply, so as (for example) not to allow fake replies or
+editorial comments.  If an implementation does so it should use the 423/424/425
+response code (for a problem in the text, an item subject or the user's
+grogname, respectively) with an appropriate message which will explain the
+problem to the user.
+
+
+2.6. DEVELOPER'S NOTES
+
+2.6.1. RACE CONDITIONS
+
+The identical item id, duplicate continuation and reply after continuation
+races which exist in Phoenix/MVS GROGGS are not implied by this protocol
+definition, nor do they exist in the current implementation.
+
+
+2.6.2. USER DATABASE MANAGEMENT
+
+Although there will have to be an administrator present on the machine running
+the server, it seems likely that remote user database management by the Editors
+will be required.
+
+The mechanism for this has not been fully defined in this protocol.  It is
+recommended that a client allow an Editor access to the UDBM command (2.2.25)
+in a fairly unhindered fashion.
+
+User database management is currently performed by a standalone program which
+can list, add, amend and delete users' entries in the user database.  This
+program can be invoked remotely by the use of UDBM.  Issuing a UDBM with no
+arguments will provide some information on how to use this facility, as the
+underlying program will then issue its usage message.
+
+In addition, a facility is described in this document (the REGU command,
+2.2.24) which allows new users to automatically register by requesting that a
+database entry be created for them and the shared identification key be sent to
+them by email.
+
+
+3. ACKNOWLEDGEMENTS
+
+Thanks are due to:
+
+* The Cambridge University Computing Service, for the Cambridge Phoenix/MVS
+  SUGGEST mechanism, GROGGS' precursor, for supporting Phoenix/MVS GROGGS.
+* John Stark <JAS11> for inventing GROGGS.
+* Paul Clark <PRC10> for Phoenix/MVS GROGGS' Readnew I, and Robert Hunt
+  <REH10>, Roy Badami <RB108>, David Robinson <DRTR1> for Readnew II.
+* The Editors of and contributors to GROGGS, past and present, for inspiration.
+* Simon Arrowsmith <SA121>, Karl Ewald <KME10>, Martin Hardcastle <MJH22>, Tim
+  Morley <TM110>, for their support and assistance.
+* Anybody else I have forgotten to mention.
+
