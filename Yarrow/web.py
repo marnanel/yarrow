@@ -47,6 +47,42 @@ exist."""
 	
 ################################################################
 
+def mailto(address, linking=0):
+	"""Returns an HTML snippet containing a mailto link for
+the given address. Correctly handles the GROGGS-specific special
+cases of spqr1@cam and spqr@foo. (We assume that all RGTP servers
+other than GROGGS use only the full network domain.)"""
+
+	# _Just_ in case we have any addresses with &s in...
+	address = cgi.escape(address)
+
+	if not linking:
+		return address # that was easy...
+
+	atpos = address.find('@')
+
+	if atpos==-1:
+		# no @-sign!
+		return address # only sensible answer, really
+
+	domain = address[atpos+1:]
+	suffix = ''
+
+	if domain=='cam':
+		# Generic Cambridge address
+		suffix = '.ac.uk'
+	elif domain.find('.')==-1:
+		# Cambridge department or college or similar
+		suffix = '.cam.ac.uk'
+
+	# mild spam-trap:
+	address = address.replace('@','&#64;').replace('.','&#46;')
+
+	return '<a href="mailto:%s%s">%s</a>' % (address, suffix,
+						 address)
+
+################################################################
+
 # FIXME: General fn to print "try again?" as a link to the current page. (use environ.)
 
 ################################################################
@@ -87,12 +123,12 @@ def html_print(message, grogname, author, time, y):
 
 	if grogname:
 		print """<table class="reply" width="100%%">
-<tr><th rowspan="2">%s</th><td><tt>%s</tt></td></tr>
+<tr><th rowspan="2">%s</th><td class="uid">%s</td></tr>
 <tr><td>%s</td></tr></table>""" % (
 		# We don't linkify the grogname, because it's often
 		# just an email address.
 		cgi.escape(grogname),
-		cgi.escape(author),
+		mailto(author, y.uidlink),
 		time,
 		)
 
@@ -444,8 +480,6 @@ class browse_handler:
 		keys = keys[sliceStart:sliceSize+sliceStart]
 
 		# Work out family relationships for the JavaScript snippet.
-		js_family = "'S1001008 S0911318 S0900316','S0872103 S0930927'"
-
 		js_family = []
 		scanned = {}
 
@@ -481,7 +515,7 @@ function r(i) { s(i.getAttribute('id'), 'related'); }
 function u(i) { s(i.getAttribute('id'), ''); }
 //-->
 </script>
-<table width="100%">
+<table width="100%" class="browse">
 <tr><th>On</th><th>#</th>
 <th>Most recently by</th><th>About</th></tr>"""
 
@@ -504,15 +538,15 @@ function u(i) { s(i.getAttribute('id'), ''); }
 				anchor = ''
 
 			if line['live']:
-				most_recently_from = line['from']
+				most_recently_from = mailto(line['from'], y.uidlink)
 			else:
 				# Don't show "most recently by" on
 				# posts that have been continued.
-				most_recently_from = '<i>-- continued above</i>'
+				most_recently_from = '-- continued above'
 
 			print """
 <tr>
-<td>%s</td><td><i>%s</i></td><td><tt>%s</tt></td>
+<td>%s</td><td><i>%s</i></td><td class="uid">%s</td>
 <td class="subject">%s<a id="%s"
 onmouseover="r(this)" onmouseout="u(this)"
 href="%s/%s%s">%s%s%s%s%s</a></td>
@@ -852,6 +886,17 @@ nargery</a>, you probably don't want this turned on.</p>
 """ % (
 	logging_checked)
 
+
+		uidlink_checked = ''
+	        if meta_field(y, 'uidlink')!=0:
+			uidlink_checked = ' checked'
+
+		print '<h2>Linking userids</h2>'
+		print '<p>Yarrow can turn userids into hyperlinks; this is mostly useful,'
+		print 'but with some kinds of browser it just gets annoying.</p>'
+		print '<p><input type="checkbox" name="uidlink"%s>' % (uidlink_checked)
+		print 'Linkify userids.</p>'
+		
                 print '<input type="submit" value=" OK ">'
 		print '<input type="hidden" name="yes" value="y">'
 		print '</form>'
@@ -950,6 +995,11 @@ nargery</a>, you probably don't want this turned on.</p>
 			put_meta_field(y, 'log', 1)
 		else:
 			put_meta_field(y, 'log', 0)
+
+		if y.form.has_key('uidlink') and y.form['uidlink'].value=='on':
+			put_meta_field(y, 'uidlink', 1)
+		else:
+			put_meta_field(y, 'uidlink', 0)
 
 		y.user.save()
 
@@ -1608,21 +1658,20 @@ th {
   font-size:10px; padding-left: 1em; float: right; }
 .menu {
   position: fixed; } /* Float it, if you can. */
-.menu a {
+.menu a, .menu a:visited {
   color: #770000; background-color: #FFFFFF; text-decoration: none; }
-.menu a:visited {
-  color: #770000; background-color: #FFFFFF; }
 .menu h1 {
   font-size:10px; color: #000000; background-color: #FFFFFF; }
 .content { position: absolute; width: 86%; height: auto;
   top: 0; left: 0; right: 90%; padding-left: 1em; background-color: #FFFFFF;
   color: #000000; text-align: left; z-index: 0; }
-a { color: #770000; background-color: #ffffff; text-decoration: underline; }
-a:visited { color: #000000; background-color: #ffffff; }
-td a { text-decoration: none; }
-td a:visited { color: #770000; background-color: #ffffff; }
-a.related { color: #FFFFFF; background-color: #770000; }
-a:visited.related { color: #FFFFFF; background-color: #770000; }
+a { color: #770000; text-decoration: underline; }
+a:visited { color: #000000; text-decoration: underline; }
+table.browse a, table.browse a:visited { text-decoration: none; color: #770000; }
+td.uid { font-style: italic; }
+td.uid a, td.uid a:visited { font-style: normal; font-family: monospace; }
+table.reply td.uid a { text-decoration: none; color: #FFFFFF; }
+table.browse a.related, table.browse a.visited { color: #FFFFFF; background-color: #770000; }
 h1 { font-size: 15pt; }
 h2 { font-size: 12pt; }
 .invisible { display: none; }
@@ -1829,9 +1878,11 @@ span.hop { font-size: 15px; border:groove; color: #777777; font-weight:bold;}
 			self.reformat = self.user.state(self.server,
 							'reformat', 0)
 			self.log = self.user.state(self.server, 'log', 0)
+			self.uidlink = self.user.state(self.server, 'uidlink', 1)
 		else:
 			self.reformat = 0
 			self.log = 0
+			self.uidlink = 1
 
 		if self.item!='' and self.verb=='':
 			self.verb = 'read' # implicit for items
