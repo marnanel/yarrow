@@ -29,7 +29,7 @@ import common
 class RGTPException (Exception):
 	"Houston, we have a problem."
 
-	def __init__(self, name):
+	def __init__(self, name=''):
 		self.name = name
 
 	def __str__(self):
@@ -52,6 +52,34 @@ class RGTPServerException(RGTPException):
 class RGTPAuthException(RGTPException):
 	"Authentication problems."
 	pass
+
+class AlreadyEditedError (RGTPException):
+	"""Thrown after an attempt to modify an item
+	which had been modified by someone else."""
+	pass
+
+class FullItemError (RGTPException):
+	"Thrown after an attempt to add to a full item."
+	pass
+
+class UnacceptableContentError (RGTPException):
+	"""Thrown if the server isn't happy with the text
+we send. There are two public member fields: |problem| is
+one of ['text','subject','grogname'], and |text| is the text
+the server sent to complain."""
+
+	def __init__(self, code, text):
+		if code==423:
+			self.problem = 'text'
+		elif code==424:
+			self.problem = 'subject'
+		elif code==425:
+			self.problem = 'grogname'
+		else:
+			raise 'unknown unacceptable content code: ' + code
+			
+		self.code = code
+		self.text = text
 
 ###########################################################
 
@@ -89,8 +117,6 @@ class response:
 			511, # Wrong parameters
 			512, # Line length problems
 			582, # Dot-doubling problems
-			423, # Malformed text
-			425, # Malformed grogname
 			):
 			raise RGTPServerException("Broken client: "+self.textual)
 		elif self.numeric in (530, 531):
@@ -318,7 +344,7 @@ class fancy:
 		self.base.send("MOTD", towel)
 		return towel.stuff
 
-	def index(self, since=None):
+	def index(self, since=None, since_is_date=0):
 		class index_reader(multiline):
 			def __init__(self):
 				multiline.__init__(self)
@@ -335,7 +361,10 @@ class fancy:
 
 		towel = index_reader()
 		if since:
-			request = 'INDX #%08x' % (since)
+			if since_is_date:
+				request = 'INDX %08x' % (since)
+			else:
+				request = 'INDX #%08x' % (since)
 		else:
 			request = 'INDX'
 
@@ -487,7 +516,11 @@ class fancy:
 		towel = status_reader()
 		self.base.send("STAT "+id, towel)
 		r = towel.result
-		return {'from': maybe_blank(r[0:8]), 'to': maybe_blank(r[9:17]), 'edited': maybe_hex(maybe_blank(r[18:26])), 'replied': maybe_hex(maybe_blank(r[27:35])), 'subject': r[36:] }
+		return {'from': maybe_blank(r[0:8]),
+			'to': maybe_blank(r[9:17]),
+			'edited': maybe_hex(maybe_blank(r[18:26])),
+			'replied': maybe_hex(maybe_blank(r[27:35])),
+			'subject': r[36:] }
 
 	def send_data(self, grogname, message):
 		class dumper(multiline):
@@ -509,13 +542,21 @@ class fancy:
 						return line
 
 				if message.code()==150:
-					# The server says "go ahead". So here goes!
-					self.base.raw_send(dot_doubled(self.name))
+					# The server says "go ahead".
+					# So here goes!
+					self.base.raw_send(
+						dot_doubled(self.name))
 					for paragraph in self.data:
 						for line in wrapping.wrap(paragraph):
 							self.base.raw_send(dot_doubled(line))
 					# All done!
 					self.base.raw_send('.')
+				elif message.code() in [423, 424, 425]:
+					# server's not happy with
+					# something we said
+					raise UnacceptableContentError(
+						message.code(),
+						message.text())
 				elif message.code()==350:
 					self.complete()
 				else:
@@ -529,65 +570,94 @@ If item is None, this is a NEWI.
 If item is not None and subject is None, this is a REPL.
 If item is not None and subject is not None, this is a CONT.
 
-Returns a 3-tuple.
+On success, returns a dictionary with keys "itemid" and "sequence".
 
-result[0]:
- -1 -- failure because this item has been edited
-  1 -- failure because this item is full now; you must CONT
-  0 -- success.
-
-Obviously not all these can be returned in all cases.
-
-result[1]: the itemid.
-result[2]: the sequence number.
-
-You should check for the item having been edited already
-yourself, as well, and not just rely on result[0] being
--1; there are cases this function won't pick up (such as
-editing which doesn't cause continuation)."""
+Failure cases:
+ Throws AlreadyEditedError if this item has been edited.
+   (You should check for the item having been edited already
+    yourself, as well; there are cases this function won't
+    pick up (such as editing which doesn't cause continuation).
+ Throws FullItemError if this item is full (so you must CONT).
+ Throws UnacceptableContentError if the content is unacceptable
+    (it could be a bad subject or grogname, or something to
+    do with the text).
+"""
 
 		class item_generator(multiline):
+			"Callback for post()."
+
 			def __init__(self, itemid):
                                 multiline.__init__(self)
-				self.result = [0, itemid, None]
+				self.itemid = itemid
+				self.sequence = None
 
 			def __call__(self, message):
 				if message.code()==120:
 					# A new itemid for us.
-					self.result[1] = message.text()
+					self.itemid = message.text()
+
 				elif message.code()==122:
 					# continuation information
 					# (it'll go to 422, below)
-					pass # for now. hmm.
+
+					# Because we're so stateless
+					# around here, we can throw
+					# this information away. If anyone
+					# wants to use this library for more
+					# general purposes, I'll add code to
+					# capture it.
+
+					pass
+
 				elif message.code()==220:
-					self.result[2] = int(
+					# Success code, and sequence number.
+					self.sequence = int(
 						message.text()[:8],16)
+					
 					# woohoo! all done
 					self.complete()
+					
 				elif message.code()==421:
-					self.result[0] = 1
-					self.complete()
+					# it's overflowing!
+					raise FullItemError()
+
 				elif message.code()==422:
 					# it's overflowed!
-					self.result[0] = -1
-					self.complete()
+					raise AlreadyEditedError()
+
+				elif message.code() in [423, 424, 425]:
+					# server's not happy with
+					# something we said
+					raise UnacceptableContentError(
+						message.code(),
+						message.text())
+
 				else:
-					raise("Wasn't expecting " + str(message))
+					raise("Wasn't expecting " +
+					      str(message))
 
 		towel = item_generator(item)
 		if item==None:
 			self.base.send('NEWI '+subject, towel)
 		else:
-			self.base.send('REPL '+item, towel)
+			try:
+				self.base.send('REPL '+item, towel)
+			except FullItemError, fie:
+				if subject!=None:
+					# ah, we don't need to return an error:
+					# we were given a subject in case
+					# this happened. Use it.
+					towel = item_generator(item)
+					self.base.send('CONT '+subject, towel)
+				else:
+					# So we don't know what to do about
+					# full items. Let's hope the
+					# caller does.
+					raise fie
 
-			if towel.result[0]==1 and subject!=None:
-				# ah, we don't need to return an error:
-				# we were given a subject in case this happened.
-				# Use it.
-				towel = item_generator(item)
-				self.base.send('CONT '+subject, towel)
-
-		return towel.result
+		# Looks like it all worked.
+		return {"itemid": towel.itemid,
+			"sequence": towel.sequence}
 
 	def edit_log(self):
 		class edit_log_reader(multiline):
@@ -688,6 +758,7 @@ class interpreted_index:
 		self.index = {}
 		self.last_sequences = { 'all': 0 }
 		self.version = 1
+		self.c_line = None
 
 	def eat(self, lines):
 		for line in lines:
@@ -696,10 +767,12 @@ class interpreted_index:
 			if sequence>self.last_sequences['all']:
 				self.last_sequences['all'] = sequence
 
-			# is there ever any possibility of lowercase here? check protocol
 			if line[4] in ['I','R','C','F']:
 				if not self.index.has_key(line[2]):
-					self.index[line[2]] = {'date': 0, 'count': 0, 'subject': 'Unknown', 'live': 1 }
+					self.index[line[2]] = {'date': 0,
+							       'count': 0,
+							       'subject': 'Unknown',
+							       'live': 1 }
 					self.last_sequences[line[2]] = 0
 
 				if line[4]!='F' and sequence > self.last_sequences[line[2]]:
@@ -712,8 +785,25 @@ class interpreted_index:
 					self.index[line[2]]['date'] = int(line[1],16)
 					self.index[line[2]]['from'] = line[3]
 
+
+
+				if line[4]!='F' and sequence > self.last_sequences[line[2]]:
+					self.last_sequences[line[2]] = sequence
+
+				if line[4] in ['I','C']:
+					self.index[line[2]]['subject'] = line[5]
+
+				if line[4]=='C':
+				    self.c_line = line
+
+				if self.index[line[2]]['date'] < int(line[1],16):
+					self.index[line[2]]['date'] = int(line[1],16)
+					self.index[line[2]]['from'] = line[3]
+
 				if line[4]=='F':
 					self.index[line[2]]['live'] = 0
+					self.index[line[2]]['parent'] = self.c_line[2]
+					self.index[self.c_line[2]]['child'] = line[2]
 
 				self.index[line[2]]['count'] = self.index[line[2]]['count'] + 1
 

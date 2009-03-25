@@ -1,7 +1,7 @@
 #!/usr/bin/python
 #
 #  wrapping.py - library to implement word-wrap
-#  v0.30
+#  $Header: /var/cvs/yarrow/Yarrow/wrapping.py,v 1.2 2003/01/26 03:39:28 marnanel Exp $
 #
 #     I'm indebted to Simon Tatham for pointing
 #     me at the algorithm used in this code.
@@ -29,10 +29,18 @@ def wrap(text, linelength = 79):
 	"Word-wraps |text|, a string. Returns a list of strings, one per line, no line longer than |linelength|."
 	costs = []
 	words_on_line = []
- 	text = string.split(text)
+	words = []
 
-	for i in range(len(text), 0, -1):
-		candidate = text[i-1:]
+	# Split |text| into |words|. Really long words are broken into pieces
+	# (solving a bug found by GS104; see S0241523).
+	for word in string.split(text):
+		while len(word)>=linelength:
+			words.append(word[0:linelength])
+			word = word[linelength:]
+		words.append(word)
+
+	for i in range(len(words), 0, -1):
+		candidate = words[i-1:]
 		width = len(candidate)-1
 		for word in candidate:
 			width += len(word)
@@ -65,7 +73,7 @@ def wrap(text, linelength = 79):
 			words_on_line.append(minimum_wol)
 
 	n = -1
-	temp = text
+	temp = words
 	result = []
 
 	while temp!=[]:

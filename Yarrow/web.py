@@ -213,7 +213,8 @@ class read_handler:
 
 			if y.connection.access_level > 1 and self.status['to']==None:
 				print '<hr>'
-				y.show_posting_box(self.status['replied'], 0)
+				y.show_posting_box(self.status['replied'],
+						   None)
 
 			print '<hr><i>(Return to <a href="%s/browse">the %s index</a>)</i>' % (
 				y.url_prefix(), y.server)
@@ -355,10 +356,8 @@ to try connecting as a guest?</p>
 
 class browse_handler:
 	def head(self, y):
-		self.collater = None
-		
 		try:
-			self.collater = cache.index(y.server, y.connection)
+			y.collater = cache.index(y.server, y.connection)
 			y.title = y.server + ' index'
 		except rgtp.RGTPException, r:
 			print http_status_from_exception(r)
@@ -392,15 +391,15 @@ class browse_handler:
 		if you_should_be_logged_in(y):
 			return
 
-		if not self.collater:
+		if not y.collater:
 			print '<p>%s</p><p>(Try' % (
 				y.title)
 			print '<a href="%s/config">reconfiguring</a>?)</p>' % (
 				y.url_prefix())
 			return
 
-		index = self.collater.items()
-		sequences = self.collater.sequences()
+		index = y.collater.items()
+		sequences = y.collater.sequences()
 
 		if y.user and not y.user.last_sequences.has_key(y.server):
 			# Stop errors below...
@@ -412,10 +411,6 @@ class browse_handler:
 				   '',
 				   '',
 				   y)
-
-		print """<table width="100%">
-<tr><th>On</th><th>#</th>
-<th>Most recently by</th><th>About</th></tr>"""
 
 		# and now we can display them. sort them by date.
 
@@ -429,18 +424,66 @@ class browse_handler:
 		keys.sort(compare_dates)
 		keys.reverse()
 
-		# FIXME: sliceSize should be configurable.
-		sliceSize = 20
 		sliceStart = 0
+		sliceSize = 20
+		if y.form.has_key('unsliced'):
+			sliceSize = len(keys)
+
+		if y.form.has_key('slice'):
+			try:
+				sliceSize = int(y.form['slice'].value)
+			except:
+				pass
+				
 		if y.form.has_key('skip'):
 			try:
 				sliceStart = int(y.form['skip'].value)
 			except:
-				sliceStart = 0
-		else:
-			sliceStart = 0
+				pass
 		
 		keys = keys[sliceStart:sliceSize+sliceStart]
+
+		# Work out family relationships for the JavaScript snippet.
+		js_family = "'S1001008 S0911318 S0900316','S0872103 S0930927'"
+
+		js_family = []
+		scanned = {}
+
+		for n in keys:
+			if not n in scanned.keys():
+
+				# Find the oldest ancestor.
+				cursor = n
+				while index[cursor].has_key('parent'):
+					cursor = index[cursor]['parent']
+
+				# OK, now find all its kids (that are on screen)
+
+				family = [cursor]
+				while index[cursor].has_key('child'):
+					cursor = index[cursor]['child']
+					family.append(cursor)
+					scanned[cursor] = 1
+
+				family = [x for x in family if x in keys]
+
+				if len(family)!=1:
+					js_family.append("'%s'" % (string.join(family,' ')))
+		del scanned
+		
+		print """
+<script><!--
+var m = [""" + string.join(js_family,",\n") + """];
+function b(i, c) { document.getElementById(i).setAttribute('class',c); }
+function g(f, i, c) { for (var k in f) { if (f[k]!=i) b(f[k], c); } }
+function s(i, c) { for (var j in m) { if (m[j].indexOf(i)!=-1) g(m[j].split(' '), i, c); } }
+function r(i) { s(i.getAttribute('id'), 'related'); }
+function u(i) { s(i.getAttribute('id'), ''); }
+//-->
+</script>
+<table width="100%">
+<tr><th>On</th><th>#</th>
+<th>Most recently by</th><th>About</th></tr>"""
 
 		for k in keys:
 			line = index[k]
@@ -470,13 +513,15 @@ class browse_handler:
 			print """
 <tr>
 <td>%s</td><td><i>%s</i></td><td><tt>%s</tt></td>
-<td class="subject">%s<a class="exempt" href="%s/%s%s">%s%s%s%s%s</a></td>
+<td class="subject">%s<a id="%s"
+onmouseover="r(this)" onmouseout="u(this)"
+href="%s/%s%s">%s%s%s%s%s</a></td>
 </tr>"""                      % (
                                 common.neat_date(line['date']),
 				str(line['count']), # always an int?
 				most_recently_from,
 				('', '&deg;')[highlight],
-				y.url_prefix(), k, anchor,
+				k, y.url_prefix(), k, anchor,
 				('<i>', '')[line['live']],
 				('', '<b>')[highlight],
 				line['subject'],
@@ -498,6 +543,11 @@ class browse_handler:
 		print 'Items %d-%d of %d' % (sliceStart+1,
 					      sliceStart+len(keys),
 					      len(index))
+
+		if y.form.has_key('unsliced'):
+			 print '| <a href="%s/browse">Most recent</a>' % (y.url_prefix())
+		else:
+			 print '| <a href="%s/browse?unsliced=1">All</a>' % (y.url_prefix())
 
 		if sliceStart - sliceSize >= 0:
 			if sliceStart==sliceSize:
@@ -525,7 +575,7 @@ class wombat_handler:
 
 	def body(self, y):
 		print """<h1>The wombat</h1>
-<p>Mary had a little lamb.<br>They met in unarmed combat,<br>'
+<p>Mary had a little lamb.<br>They met in unarmed combat,<br>
 and (for the sake of rhyming verse)<br>it turned into a wombat.</p>"""
 
 ################################################################
@@ -543,8 +593,6 @@ class post_handler:
 			self.form(y)
 
 	def submit(self, y):
-		submission_status = [0]
-
 		if y.form.has_key('from'):
 			name = y.form['from'].value
 		else:
@@ -560,21 +608,41 @@ class post_handler:
 		else:
 			item = None
 
-		if y.form.has_key('sequence'):
-			# They've requested some sanity checks:
-			# the item hasn't been continued, and its reply number
-			# matches a certain sequence number.
-			currently = y.connection.stat(y.item)
-			if currently['to'] or \
-			   (int(y.form['sequence'].value,16) != currently['replied']):
-				submission_status[0] = -1
+		if (not subject) and (not item):
+			print '<h1>You must give a subject</h1>'
+			print '<p>You cannot post an item without a subject.'
+			print 'Please try again.</p>'
+			y.show_posting_box(None,
+					   '',
+					   y.form['data'].value)
+			return
 
-		if submission_status[0]==0: # Still OK to send stuff?
+		try:
+			if y.form.has_key('sequence'):
+				# They've requested some sanity checks:
+				# the item hasn't been continued, and
+				# its reply number matches a certain sequence number.
+				currently = y.connection.stat(y.item)
+				if currently['to'] or \
+				   (int(y.form['sequence'].value,16) !=
+				    currently['replied']):
+					# Then it's been edited.
+					raise rgtp.AlreadyEditedError()
+
 			y.connection.send_data(name,
-					       string.split(y.form['data'].value, '\r\n'))
-			submission_status = y.connection.post(item, subject)
+					       string.split(y.form['data'].value,
+							    '\r\n'))
+			details = y.connection.post(item, subject)
 
-		if submission_status[0]==-1:
+			# Success! Work out the URL of the new posting.
+			print '<h1>Added comment</h1>'
+			print 'Your comment was added. You can view it'
+			print '<a href="%s/%s#%x">here</a>.' % (
+				y.url_prefix(),
+				details['itemid'],
+				details['sequence'])
+
+		except rgtp.AlreadyEditedError:
 			# Nope, someone's been there before us.
 			# We should tell them what they said.
 			# (IE has a nasty habit of eating the
@@ -590,21 +658,29 @@ and when you submitted your reply. I suggest you go and read
 				print line + '<br>'
 			print '</blockquote></p>'
 
-		elif submission_status[0]==1:
+		except rgtp.FullItemError:
 			print '<h1>That item\'s full</h1>'
 			print '<p>You need to start a new item. Edit your text'
 			print 'if needs be, and think of an appropriate new subject'
 			print 'line.</p>'
-			y.show_posting_box(None, 1, y.form['data'].value)
+			y.show_posting_box(None, '', y.form['data'].value)
 
-		else:
-			# Success! Work out the URL of the new posting.
-			print '<h1>Added comment</h1>'
-			print 'Your comment was added. You can view it'
-			print '<a href="%s/%s#%x">here</a>.' % (
-				y.url_prefix(),
-				submission_status[1],
-				submission_status[2])
+		except rgtp.UnacceptableContentError, uce:
+			print """
+<h1>%s</h1>
+<p>The server isn't happy with %s. It says:</p><blockquote>%s</blockquote>
+<p>Please fix the problem and try again.</p>""" % (
+				uce.text,
+				{
+				'text': 'the text of your posting',
+				'subject': 'the subject of your posting',
+				'grogname': 'your grogname',
+				} [uce.problem],
+				uce.text);
+
+			y.show_posting_box(None,
+					   subject,
+					   y.form['data'].value)
 
 	def form(self, y):
 		print '<h1>Post a new item</h1>'
@@ -821,7 +897,7 @@ nargery</a>, you probably don't want this turned on.</p>
 
 		if userid:
 			test_connection = rgtp.fancy(y.server_details['host'],
-				y.server_details['port'], 1)
+				y.server_details['port'], 0)
 			try:
 				# We need at least a 1.
 				test_connection.raise_access_level(1, userid, secret)
@@ -834,28 +910,10 @@ nargery</a>, you probably don't want this turned on.</p>
 				print ['no','read-only','normal read and append','full editor'][test_connection.access_level]
 				print 'access to %s.</p>' % (y.server)
 				test_connection.logout()
-
-				b = open('/tmp/brook','a')
-				b.write('-----\n%s\n%s\n%s\n%s\n\n' % (
-					str(os.environ),
-					str(userid),
-					str(secret),
-					str(test_connection.base.log),
-					))
-				b.close()
 			except rgtp.RGTPException:
 				print '<h1>Authentication failure</h1>'
 				print '<p>That doesn\'t appear to be a registered shared-secret'
 				print 'on %s. <a href="%s/config">Try again?</a></p>' % (y.server, y.url_prefix())
-				b = open('/tmp/brook','a')
-				b.write('-----\n%s\n%s\n%s\n%s\n\n' % (
-					str(os.environ),
-					str(userid),
-					str(secret),
-					str(test_connection.base.log),
-					))
-				b.close()
-				
 				return
 		else:
 			put_meta_field(y, 'userid', userid)
@@ -978,8 +1036,10 @@ to the Internet. If you don't have a yarrow account, you may
 <tr><td>Username:</td> <td><INPUT TYPE="text" NAME="user"></td></tr>
 <tr><td>Password:</td> <td><INPUT TYPE="password" NAME="password">
  <a href="%s/resetpass">(Forget?)</a> </td></tr>
-<tr><td>Remember my login on this computer</td>
- <td><INPUT TYPE="checkbox" CHECKED NAME="remember"></td></tr>
+<tr><td>Remember my login on this computer.</td>
+ <td><INPUT TYPE="checkbox" CHECKED NAME="remember"><br>
+(You probably want to leave this turned on,
+unless you're using a public workstation.) </td></tr>
 <tr><td colspan="2" align="right"><input type="submit" value=" OK "></td></tr>
 </table></form>
 
@@ -1251,28 +1311,6 @@ class verb_listing_handler:
 
 ################################################################
 
-class destroy_account_handler:
-	def head(self, y):
-		y.title = 'Destroy your account'
-
-	def body(self, y):
-		print '<h1>Destroy your yarrow account</h1>'
-		print '<p>From here, you can destroy your whole yarrow account.</p>'
-		print '<p><form action="'+y.url_prefix('sys')+'" method="post"><table>'
-		print '<tr><td>Username:</td>'
-		print '<td><INPUT TYPE="text" NAME="user"></td></tr>'
-		print '<tr><td>Password:</td>'
-		print '<td><INPUT TYPE="password" NAME="password">'
-		print '<a href="'+y.url_prefix()+'/resetpass">(Forget?)</a>'
-		print '</td></tr>'
-		print '<tr><td colspan="2" align="right">'
-		print '<input type="submit" value=" OK "></td></tr>'
-		print '</table></form></p>'
-
-		# FIXME handle it!	
-
-################################################################
-
 class regu_handler:
 	"Lets you create an account on an RGTP server."
 	def head(self, y):
@@ -1419,6 +1457,9 @@ class yarrow:
 		# No connection yet.
 		self.connection=None
 
+		# The collated index
+		self.collater = None
+
 	################################################################
 
 	def accept_user(self, user, add_cookies=0, cookie_expiry=0):
@@ -1449,7 +1490,9 @@ class yarrow:
 				itemid,
 				)
 		
-	def show_posting_box(self, sequence=None, show_subject=1, textblock=None):
+	def show_posting_box(self, sequence=None, subject='', textblock=None):
+		"Prints the form for submissions of new postings."
+		
 		if self.item=='':
 			item_link = ''
 		else:
@@ -1472,9 +1515,9 @@ class yarrow:
 		print 'From <input type="text" name="from" value="'+\
 			cgi.escape(suitable_grogname(self), 1)+\
 			'" style="width: 99%"><br>'
-		if show_subject:
+		if subject!=None:
 			print 'Subject <input type="text" name="subject" '+\
-				'value="" style="width: 99%"><br>'
+				'value="'+subject+'" style="width: 99%"><br>'
 		print 'Message <textarea style="width: 99%" cols="50" '+\
 			'class="textbox" rows="10" name="data">'
 		if textblock:
@@ -1520,8 +1563,27 @@ class yarrow:
 
 			self.logging_in_status = 'ok'
 
+	def hop_target(self):
+		"""Returns the itemid of the hop target, or None if there's
+		no good place to go."""
+
+		if not self.collater:
+			# FIXME: Possibly this should be done automatically
+			# when they make the connection.
+			try:
+				self.collater = cache.index(self.server,
+							 self.connection)
+			except rgtp.RGTPException, r:
+				return None
+			
+		if self.item:
+			return 'item'
+		else:
+			return None
+
 	def print_headers(self, fly):
 		fly.set_cookies(self.outgoing_cookies)
+
 		print """
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
 "http://www.w3.org/TR/html4/loose.dtd">
@@ -1555,21 +1617,18 @@ th {
 .content { position: absolute; width: 86%; height: auto;
   top: 0; left: 0; right: 90%; padding-left: 1em; background-color: #FFFFFF;
   color: #000000; text-align: left; z-index: 0; }
-a {
-  color: #770000; background-color: #ffffff; text-decoration: underline; }
-a.exempt {
-  text-decoration: none; }
-a.exempt:visited {
-  color: #770000; background-color: #ffffff; }
-a:visited {
-  color: #000000; background-color: #ffffff; }
-h1 {
-  font-size: 15pt; }
-h2 {
-  font-size: 12pt; }
-.invisible {
-  display: none; }
+a { color: #770000; background-color: #ffffff; text-decoration: underline; }
+a:visited { color: #000000; background-color: #ffffff; }
+td a { text-decoration: none; }
+td a:visited { color: #770000; background-color: #ffffff; }
+a.related { color: #FFFFFF; background-color: #770000; }
+a:visited.related { color: #FFFFFF; background-color: #770000; }
+h1 { font-size: 15pt; }
+h2 { font-size: 12pt; }
+.invisible { display: none; }
+span.hop { font-size: 15px; border:groove; color: #777777; font-weight:bold;}
 --></style>
+<link rel="shortcut icon" href="/favicon.ico">
 </head><body><div class="content">"""
 
 	def print_footers(self):
@@ -1617,12 +1676,21 @@ h2 {
 <a href="http://rgtp.thurman.org.uk/yarrow/">about</a><br>
 <a href="http://validator.w3.org/check/referer">valid&nbsp;HTML</a><br>
 <a href="http://jigsaw.w3.org/css-validator/check/referer">valid&nbsp;CSS</a>
-</div>
-</body></html>"""
+<br><br>"""
 
+                # are we doing this?
+		# hop_to = self.hop_target()
+                # if hop_to:
+		# 	print """<span class="hop" title="Hop to: %s">
+		# <a href="%s/%s">hop</a></span>""" % (hop_to, self.url_prefix(), hop_to)
+		# else:
+		#	print """<span class="hop"
+		# title="Nowhere's better than anywhere else!">hop</span>"""
+
+		print '</div></body></html>'
 	
 	def maybe_print_logs(self):
-		if not self.connection:
+		if not self.connection or not self.connection.base.logging:
 			return
 		print '<h1>Log</h1><pre>'
 		for anything in string.split(self.connection.base.log,'\n'):
@@ -1760,10 +1828,10 @@ h2 {
 		if self.user:
 			self.reformat = self.user.state(self.server,
 							'reformat', 0)
-			self.log = 1 # self.user.state(self.server, 'log', 0)
+			self.log = self.user.state(self.server, 'log', 0)
 		else:
 			self.reformat = 0
-			self.log = 1
+			self.log = 0
 
 		if self.item!='' and self.verb=='':
 			self.verb = 'read' # implicit for items
@@ -1801,7 +1869,6 @@ h2 {
 		'newbie': newbie_handler,
 		'newpass': change_password_handler,
 		'server': server_chooser_handler,
-		'destroy': destroy_account_handler,
 		'resetpass': reset_password_handler,
 	}
 
