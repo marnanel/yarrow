@@ -1,7 +1,7 @@
 #!/usr/bin/python
 #
 #  yarrow - (yet another retro reverse-ordered website?)
-#  v0.20
+#  v0.30
 #
 # Copyright (c) 2002 Thomas Thurman
 # thomas@thurman.org.uk
@@ -29,28 +29,27 @@ import string
 import Cookie
 import sys
 import re
-import config
 
 if os.environ.has_key('SCRIPT_NAME'):
 	prefix = os.environ['SCRIPT_NAME'] + '/'
 else:
 	prefix = '/'
 
-def unentity(text):
-	"Replaces the three characters which are unsafe in HTML with their corresponding entities."
-	text = string.replace(text, '&', '&amp;')
-	text = string.replace(text, '<', '&lt;')
-	text = string.replace(text, '>', '&gt;')
-	return text
+# Prefix for linking to stuff that never changes. At present this is:
+#   - the CSS
+#   - reverse-gossip.gif
+#   - favicon.ico
+static_prefix = '/'
 
 def linkify(text, item_prefix = None):
-	"Adds hyperlinks to |text|. If you use this with unentity, call unentity first. |item_prefix| is what to add to GROGGS itemids; leave this as None if you don't want to linkify them."
-	temp = re.sub('(http:[A-Za-z0-9_+~#/?=%.-]*)', r'<a href="\1">\1</a>', text)
-	temp = re.sub('(ftp:[A-Za-z0-9_+~#/?=%.-]*)', r'<a href="\1">\1</a>', temp)
-	temp = re.sub('(gopher:[A-Za-z0-9_+~#/?=%.-]*)', r'<a href="\1">\1</a>', temp)
-	temp = re.sub('([A-Za-z0-9._+-]*@[A-Za-z0-9._+]*)', r'<a href="mailto:\1">\1</a>', temp)
+	"Adds hyperlinks to |text|. If you use this with cgi.escape(), call that first. |item_prefix| is what to add to GROGGS itemids; leave this as None if you don't want to linkify them."
+	temp = text
 	if item_prefix:
 		temp = re.sub(r'\b([A-Za-z]\d{7})\b', r'<a href="'+item_prefix+r'/\1">\1</a>', temp)
+	temp = re.sub('(http:[A-Za-z0-9_+~#/?=%.-]*)(?!<)', r'<a href="\1">\1</a>', temp)
+	temp = re.sub('(ftp:[A-Za-z0-9_+~#/?=%.-]*)(?!<)', r'<a href="\1">\1</a>', temp)
+	temp = re.sub('(gopher:[A-Za-z0-9_+~#/?=%.-]*)(?!<)', r'<a href="\1">\1</a>', temp)
+	temp = re.sub('([A-Za-z0-9._+-]*@[A-Za-z0-9._+]+)', r'<a href="mailto:\1">\1</a>', temp)
 	# I was considering allowing www.anything to be an http link, but that starts
 	# interfering with the text when it's already in a link. Odd that links can't
 	# nest, isn't it?
@@ -62,17 +61,17 @@ def html_print(message, grogname, author, time, reformat, item_prefix=''):
 
 	print '<table class="reply" width="100%"><tr><th rowspan="2">'
 	# We don't linkify the grogname, because it's often just an email address.
-	print unentity(grogname)
+	print cgi.escape(grogname)
 	print '</th><td>'
-	print unentity(author)
+	print cgi.escape(author)
 	print '</td></tr><tr><td>'
-	print unentity(time)
+	print cgi.escape(time)
 	print '</td></tr></table>'
 
 	# And now for some real content.
 
 	for line in message:
-		print linkify(unentity(line), item_prefix)
+		print linkify(cgi.escape(line), item_prefix)
 		if reformat:
 			if line=='':
 				print '<br><br>'
@@ -123,7 +122,7 @@ class yarrow:
 
 		if wanted[0]*12+wanted[1] > self.current_time[0]*12+self.current_time[1]-12:
 			# only print the time if it's less than a year ago
-			result = time.strftime("%I:%m&nbsp;%p&nbsp;",wanted) + result
+			result = time.strftime("%I:%M&nbsp;%p&nbsp;",wanted) + result
 		else:
 			# otherwise tell them the year
 			result = result + '&nbsp;' +str(wanted[0])
@@ -318,9 +317,9 @@ class yarrow:
 				checked = ''
 			print '<input type="radio" name="'+name+'" value="'+str(value)+'"'+checked+'>'
 
-		print '<h1>Your profile</h1>'
+		print '<h1>Your settings</h1>'
 
-		print '<form action="'+prefix+self.server+'/profile" method="post">'
+		print '<form action="'+prefix+self.server+'/browse/" method="post">'
 		if self.grogname!='':
 			example_name = self.grogname
 		else:
@@ -350,7 +349,7 @@ class yarrow:
 
 		print '<h2>Reformatting</h2>'
 		radio(self, 'reformat', 1)
-		print 'Attempt to format lines to be as wide as your screen<br>'
+		print 'Attempt to format lines to be as wide as your screen.<br>'
 		radio(self, 'reformat', 0)
 		print 'Leave lines being'
 		print '80 characters wide as they\'re received from the server, just as'
@@ -397,7 +396,7 @@ class yarrow:
 			print '<table align="center"><tr><td><img src="/exclamation" width="36" height="35" alt="/!\\"></td><td>'
 			print '<b>Please read this before continuing:</b><br><br>'
 			for line in warning:
-				print unentity(line) + '<br>'
+				print cgi.escape(line) + '<br>'
 			print '</td></tr><tr><td colspan="2" align="right">'
 			print '<FORM ACTION="'+prefix+self.server+'/newbie/" METHOD="POST"><INPUT TYPE="text" NAME="newbie"> <INPUT TYPE="submit" VALUE=" Apply "></FORM>'
 			print '</td></tr></table>'
@@ -417,63 +416,69 @@ class yarrow:
 		print '<HEAD><TITLE>' + self.title + '</TITLE>'
 	
 		print '<style type="text/css"><!--'
-		print '@import "/yarrow.css";'
+		print '@import "' + static_prefix + 'yarrow.css";'
 		print '--></style>'
-		print '<link rel="SHORTCUT ICON" href="/favicon.ico">'
+		print '<link rel="SHORTCUT ICON" href="' + static_prefix + 'favicon.ico">'
 		print '</head>'
 	
 		print '<body>'
 
 		print '<div class="status">'
-		print '<img src="/reverse-gossip" height="64" width="294" alt="Reverse Gossip" align="right">'
+		print '<img src="' + static_prefix + 'reverse-gossip.gif" height="64" width="294" alt="Reverse Gossip" align="right">'
 
 		if self.server!='':
-			print '<b>this is:</b> ' + self.server + '<br>'
+			print '<a href="'+prefix+'"><b>this is:</b></a> ' + self.server + '<br>'
 
-			print '<b>you are:</b> '
+			print '<a href="'+prefix+self.server+'/login/"><b>you are:</b></a>'
 			if self.user=='':
 				print '<i>guest</i><br>'
 			else:
 				print self.user + '<br>'
 
+		print '<a href="'+prefix+self.server+'/profile/"><b>grogname:</b></a>'
 		if self.grogname!='':
-			print '<b>grogname:</b> '+self.grogname+'<br>'
+			print self.grogname+'<br>'
+		else:
+			print '<i>not set</i><br>'
 
-		print '<b>client:</b> <a href="http://rgtp.thurman.org.uk/yarrow/">yarrow</a> 0.20'
+		print '<a href="http://rgtp.thurman.org.uk/yarrow/"><b>client:</b></a>'
+		print 'yarrow 0.30'
 
 		print '</div>'
 
 		print '<div class="menu">'
 		if self.server!='':
-			self.serverlink('login','Log&nbsp;in')
-			self.serverlink('logout','Log&nbsp;out')
+			self.serverlink('browse','index')
+			self.serverlink('post','post')
+			self.serverlink('motd','status')
 			print '<br>'
-			self.serverlink('browse','Recent')
-			self.serverlink('post','Update')
-			self.serverlink('motd','Status')
-			self.serverlink('profile','Profile')
-		print '<br><br>'
-		print '<a href="'+prefix+'">Servers</a><br><br>'
-		print '<a href="'+prefix+'yarrow-faq/browse/">Help</a><br><br>'
-		print '<a href="http://validator.w3.org/check/referer">Valid&nbsp;HTML</a><br>'
-		print '<a href="http://jigsaw.w3.org/css-validator/check/referer">Valid&nbsp;CSS</a><br>'
+			self.serverlink('profile','settings')
+			print '<br>'
+			if self.user=='':
+				self.serverlink('login','log&nbsp;in')
+			else:
+				self.serverlink('logout','log&nbsp;out')
+		print '<br>'
+		print '<a href="'+prefix+'yarrow-faq/browse/">help</a><br><br>'
+		print '<a href="http://validator.w3.org/check/referer">valid&nbsp;HTML</a><br>'
+		print '<a href="http://jigsaw.w3.org/css-validator/check/referer">valid&nbsp;CSS</a><br>'
 		print '</div>'
 		print '<div class="content">'
 	
 	def maybe_print_logs(self):
 		if not self.connection or not self.connection.base.logging:
 			return
-		print "<h1>Log</h1>"
+		print '<h1>Log</h1><pre>'
 		for anything in string.split(self.connection.base.log,'\n'):
 			if not anything or anything=='':
 				pass
 			elif anything[0]=='<':
-				print '<b>' + unentity(anything[1:]) + '</b>'
+				print cgi.escape(anything[1:])
 			elif anything[0]=='>':
-				print unentity(anything[1:])
+				print '<b>' + cgi.escape(anything[1:]) + '</b>'
 			else:
-				print '<i>'+unentity(anything)+'</i>'
-			print '<br>'
+				print '<i>'+cgi.escape(anything)+'</i>'
+		print '</pre>'
 
 	def harvest(self, key):
 		if self.form.has_key(key):
@@ -566,7 +571,7 @@ class yarrow:
 
 		# Now, pick up the persistent things:
 		self.user = self.harvest_with_cookies('user')
-		self.password = self.harvest_with_cookies('password')
+		self.password = string.join(string.split(self.harvest_with_cookies('password')),'')
 		self.grogname = self.harvest_with_cookies('grogname')
 		self.usenc = safeint(self.harvest_with_cookies('usenc'), 0)
 		self.reformat = safeint(self.harvest_with_cookies('reformat'), 1)
@@ -576,9 +581,14 @@ class yarrow:
 		"Start working on a task as soon as we know what it is, before the HTML starts printing."
 		if self.verb=='read':
 			self.connection.raise_access_level(None, self.user, self.password)
-			self.this_status = self.connection.stat(self.item)
-			self.title = self.this_status['subject']
-			self.this_item = self.connection.item(self.item)
+			try:
+				self.this_status = self.connection.stat(self.item)
+				self.title = self.this_status['subject']
+				self.this_item = self.connection.item(self.item)
+			except rgtp.RGTPException, r:
+				self.title = str(r)
+				self.this_status = None
+				self.this_item = None
 		elif self.verb=='motd':
 			self.title = self.server + ' message of the day'
 		elif self.verb=='wombat':
@@ -609,25 +619,28 @@ class yarrow:
 			print 'and (for the sake of rhyming verse)<br>'
 			print 'it turned into a wombat.</p>'
 		elif self.verb=='read':
-			def possibly_link(self, title, key):
+			def possibly_link(self, title, key, anchor):
 				"If we have a continuation in direction 'key', prints a link to it."
 				target = self.this_status[key]
 				if target:
-					name = self.connection.stat(target)['subject']
-					print '<p><i>(' + title
-					print '<a href="' + prefix + self.server + '/' + target + '">' + name + '</a>)</i></p>'
-			print '<h1>' + linkify(unentity(self.title), prefix+self.server) + '</h1>'
+					try:
+						name = self.connection.stat(target)['subject']
+						print '<p><i>(' + title
+						print '<a href="' + prefix + self.server + '/' + target + anchor + '">' + name + '</a>)</i></p>'
+					except rgtp.RGTPException:
+						print '<p><i>('+title+' item '+target+', which is no longer available.)</i></p>'
+			print '<h1>' + linkify(cgi.escape(self.title), prefix+self.server) + '</h1>'
+			if self.this_item:
+				possibly_link(self, 'Continued from', 'from', '#end')
+				for i in self.this_item[2:]:
+					html_print(i[3], i[0], i[1], i[2], self.reformat, prefix+self.server)
+				possibly_link(self, 'Continued in', 'to', '')
 
-			possibly_link(self, 'Continued from', 'from')
-			for i in self.this_item[2:]:
-				html_print(i[3], i[0], i[1], i[2], self.reformat, prefix+self.server)
-			possibly_link(self, 'Continued in', 'to')
+				if self.connection.access_level > 1 and self.this_status['to']==None:
+					print '<hr>'
+					self.show_posting_box(self.this_status['replied'], 0)
 
-			if self.connection.access_level > 1 and self.this_status['to']==None:
-				print '<hr>'
-				self.show_posting_box(self.this_status['replied'], 0)
-
-			print '<hr><i>(Return to <a href="' + prefix + self.server + '/browse/">the ' + self.server + ' index</a>)</i></p>'
+			print '<hr><i>(Return to <a href="' + prefix + self.server + '/browse/">the ' + self.server + ' index</a>)</i>'
 		elif self.verb=='motd':
 			self.motd()
 		elif self.verb=='newbie':
@@ -649,19 +662,18 @@ try:
 	y.connection = y.connect()
 	y.begin_tasks()
 	y.print_headers()
-except rgtp.RGTPException, b:
-	y.print_headers()
-	print "<h1>Early exception</h1>"
-	print b
-	y.maybe_print_logs()
-
-try:
 	y.finish_tasks()
-except rgtp.RGTPException, b:
-	print "<h1>Exception</h1>"
-	print b
+except:
+	print
+	print "<h1>Something went wrong there.</h1>"
+	cgi.print_exception()
+	try:
+		y.maybe_print_logs()
+	except:
+		pass # Oh well.
+	sys.exit(255)
 
 y.maybe_print_logs()
 
-print '</div></BODY></HTML>'
+print '<a name="end"></a></div></BODY></HTML>'
 

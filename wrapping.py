@@ -1,7 +1,7 @@
 #!/usr/bin/python
 #
 #  wrapping.py - library to implement word-wrap
-#  v0.02
+#  v0.30
 #
 #     I'm indebted to Simon Tatham for pointing
 #     me at the algorithm used in this code.
@@ -25,7 +25,7 @@
 
 import string
 
-def wrap(text, linelength = 80):
+def wrap(text, linelength = 79):
 	"Word-wraps |text|, a string. Returns a list of strings, one per line, no line longer than |linelength|."
 	costs = []
 	words_on_line = []

@@ -440,8 +440,10 @@ class fancy:
 			def __call__(self, message):
 				if message.code()==211:
 					self.result = message.text()
+				elif message.code()==410:
+					raise RGTPException("Not available: "+message.text())
 				else:
-					raise("Wasn't expecting " + str(message))
+					raise RGTPException("Wasn't expecting " + str(message))
 
 		def maybe_blank(thing):
 			if thing=='        ':
