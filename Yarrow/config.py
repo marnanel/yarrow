@@ -20,6 +20,23 @@
 # http://www.gnu.org/copyleft/gpl.html ; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
 
-import Yarrow.web
+# This should mostly end up in a file such as /etc/yarrow.conf.
 
-Yarrow.web.run_cgi()
+# The version of yarrow this is.
+version = 'yarrow 0.40'
+
+# Prefix for linking to HTTP stuff that never changes. At present this is:
+#   - the CSS
+#   - reverse-gossip.gif
+#   - favicon.ico
+# Must end with a slash.
+http_static_prefix = '/'
+
+# Source address for yarrow mail (sent when they set up a new account
+# or change their password.)
+
+# You can use yarrow@thurman.org.uk if you like,
+# but you probably want to pick something else.
+
+mail_source_address = 'yarrow@thurman.org.uk'
+

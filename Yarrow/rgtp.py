@@ -25,9 +25,11 @@ import string
 import md5
 import binascii
 import wrapping
+import common
 
 ###########################################################
 
+# FIXME: Should this be called RGTPError, to fit in with naming conventions?
 class RGTPException (Exception):
 	"Houston, we have a problem."
 
@@ -210,7 +212,7 @@ class fancy:
 
 			def __init__(self, base, email, sharedsecret):
 				multiline.__init__(self)
-				self.clientnonce = "8a0eb22b27cc2dd5373f8cd9657fe8ea"
+				self.clientnonce = common.random_hex_string()
 				self.hash = md5.new()
 				self.base = base
 				self.email = email[0:16]
@@ -279,9 +281,10 @@ class fancy:
 		self.base.send("MOTD", towel)
 		return towel.stuff
 
-	def index(self):
+	def index(self, since=None):
 		class index_reader(multiline):
 			def __init__(self):
+				multiline.__init__(self)
 				self.result = []
 
 			def __call__(self, message):
@@ -294,31 +297,13 @@ class fancy:
 					self.complete()
 
 		towel = index_reader()
-		self.base.send("INDX", towel)
+		if since:
+			request = 'INDX #%08x' % (since)
+		else:
+			request = 'INDX'
+
+		self.base.send(request, towel)
 		return towel.result
-
-	def interpreted_index(self):
-		index = {}
-		for line in self.index():
-
-			if line[4]=='I' or line[4]=='R' or line[4]=='C' or line[4]=='F':
-				if not index.has_key(line[2]):
-					index[line[2]] = {'date': 0, 'count': 0, 'subject': 'Unknown', 'live': 1 }
-
-				if line[4]=='I' or line[4]=='C':
-					index[line[2]]['subject'] = line[5]
-
-				if index[line[2]]['date'] < int(line[1],16):
-					index[line[2]]['date'] = int(line[1],16)
-					index[line[2]]['from'] = line[3]
-
-				if line[4]=='F':
-					index[line[2]]['live'] = 0
-
-				index[line[2]]['count'] = index[line[2]]['count'] + 1;
-
-		return index
-
 
 	def logout(self):
 		if self.access_level != 0:
@@ -381,8 +366,12 @@ class fancy:
 							# Well, just give them the address again.
 							grogname = author
 
-					self.result.append((grogname, date, author, lines))
-
+					self.result.append({'grogname': grogname,
+						'date': date,
+						'author': author,
+						'message': lines,
+						'sequence': self.sequence,
+						'timestamp': self.timestamp})
 					self.buffer=''
 
 			def __call__(self, message):
@@ -391,11 +380,13 @@ class fancy:
 					if self.firstline:
 						self.firstline = 0
 						# should parse it, but...
-						# FIXME: what's this about?
 						self.result.append(text)
-						self.result.append(text)
+
 					elif text!='' and text[0]=='^' and text[1]!='^':
 						self.put_buffer()
+						if len(text)==18:
+							self.sequence = int(text[1:9], 16)
+							self.timestamp = int(text[10:18], 16)
 					else:
 						if text!='' and text[0] in ['^', '.']:
 							text = text[1:]
@@ -412,7 +403,6 @@ class fancy:
 		self.base.send("ITEM "+id, towel)
 		return towel.result
 
-
         def raise_access_level(self, target=None, user=None, password=None):
 		# Set target==None to get as high as we can with current
 		# credentials.
@@ -424,12 +414,11 @@ class fancy:
 		                if target!=None and target > self.access_level:
 					raise RGTPException(user + " doesn't have a high enough access level.")
                         else:
-				# No username. Hmm, maybe we can try the "guest" trick.
-                                if (target==None or target==1) and self.access_level==0:
-                                        self.login("guest", 0)
-                                else:
-					if target!=None:
-	                                        raise RGTPException("You need to log in for that.")
+				# No username. Hmm, maybe we could try the "guest" attack...
+				# ...but this has been removed by request of Ian Jackson
+				# and Owen Dunn.
+				if target!=None:
+                                        raise RGTPException("You need to log in for that.")
 
 		# So, did it work?
                 if target > self.access_level:
@@ -451,10 +440,16 @@ class fancy:
 			else:
 				return thing
 
+		def maybe_hex(thing):
+			if thing==None:
+				return None
+			else:
+				return int(thing, 16)
+
 		towel = status_reader()
 		self.base.send("STAT "+id, towel)
 		r = towel.result
-		return {'from': maybe_blank(r[0:8]), 'to': maybe_blank(r[9:17]), 'edited': maybe_blank(r[18:26]), 'replied': maybe_blank(r[27:35]), 'subject': r[36:] }
+		return {'from': maybe_blank(r[0:8]), 'to': maybe_blank(r[9:17]), 'edited': maybe_hex(maybe_blank(r[18:26])), 'replied': maybe_hex(maybe_blank(r[27:35])), 'subject': r[36:] }
 
 	def send_data(self, grogname, message):
 		class dumper(multiline):
@@ -549,4 +544,127 @@ class fancy:
 		else:
 			return towel.already_edited_status
 
+	def edit_log(self):
+		class edit_log_reader(multiline):
+			def __init__(self):
+				multiline.__init__(self)
+				self.state = 0
+				self.result = []
 
+			def __call__(self, message):
+				if message.code()==-1:
+					if self.state==0:
+						b = string.split(message.text())
+						self.change = {}
+
+						if b[0]=="Item":
+							self.change['item'] = b[1]
+							b=b[2:]
+						elif b[0]=="Index":
+							b=b[1:]
+						else:
+							raise RGTPException('Unexpected stuff in edit log')
+
+						self.change['action'] = b[0]
+						self.change['editor'] = b[2]
+						self.change['date'] = string.join(b[4:9])
+#						self.change['sequence'] = b[9][2:10]
+						if len(b)>9:
+							self.change['sequence'] = b[9]
+						else:
+							# Very old versions of IWJ's rgtp didn't
+							# supply this.
+							self.change['sequence'] = ''
+					elif self.state==1:
+						self.change['reason'] = message.text()
+						self.result.append(self.change)
+
+					self.state = (self.state+1)%3
+
+				elif message.code()==0:
+					self.complete()
+
+		towel = edit_log_reader()
+		self.base.send("ELOG", towel)
+		return towel.result
+
+	def diff(self, itemid):
+		"Returns the changes made by an editor to an item. |itemid| may be None, in which case the index is diffed."
+		class diff_reader(multiline):
+			def __init__(self):
+				multiline.__init__(self)
+				self.state = 0
+				self.result = []
+
+			def __call__(self, message):
+				if message.code()==-1:
+					self.result.append(message.text())
+				elif message.code()==0:
+					self.complete()
+
+		towel = diff_reader()
+		if itemid:
+			self.base.send("DIFF "+itemid, towel)
+		else:
+			self.base.send("DIFF", towel)
+		return towel.result
+
+	def literal(self, strings):
+		"Sends a series of literal commands to the server. Ignores the results."
+
+		dummy = callback()
+
+		for thing in strings:
+                        if thing!='':
+				self.base.send(thing, dummy)
+
+
+################################################################
+
+# bah. explain this. i don't feel like explaining it atm.
+
+# need to add fields for:
+# datestamp of last eat()
+class interpreted_index:
+	def __init__(self):
+		self.index = {}
+		self.last_sequences = { 'all': 0 }
+		self.version = 1
+
+	def eat(self, lines):
+		for line in lines:
+
+			sequence = int(line[0], 16)
+			if sequence>self.last_sequences['all']:
+				self.last_sequences['all'] = sequence
+
+			# is there ever any possibility of lowercase here? check protocol
+			if line[4]=='I' or line[4]=='R' or line[4]=='C' or line[4]=='F':
+				if not self.index.has_key(line[2]):
+					self.index[line[2]] = {'date': 0, 'count': 0, 'subject': 'Unknown', 'live': 1 }
+					self.last_sequences[line[2]] = 0
+
+				if line[4]!='F' and sequence > self.last_sequences[line[2]]:
+					self.last_sequences[line[2]] = sequence
+
+				if line[4]=='I' or line[4]=='C':
+					self.index[line[2]]['subject'] = line[5]
+
+				if self.index[line[2]]['date'] < int(line[1],16):
+					self.index[line[2]]['date'] = int(line[1],16)
+					self.index[line[2]]['from'] = line[3]
+
+				if line[4]=='F':
+					self.index[line[2]]['live'] = 0
+
+				self.index[line[2]]['count'] = self.index[line[2]]['count'] + 1
+
+			elif line[4]=='M':
+				self.last_sequences['motd'] = sequence
+
+	def items(self):
+		# throw if version!=1?
+		return self.index
+
+	def sequences(self):
+		return self.last_sequences

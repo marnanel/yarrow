@@ -1,7 +1,7 @@
 #!/usr/bin/python
 #
-#  yarrow - (yet another retro reverse-ordered website?)
-#  v0.40
+#  FIXME: explain
+#  v0.02
 #
 # Copyright (c) 2002 Thomas Thurman
 # thomas@thurman.org.uk
@@ -20,6 +20,32 @@
 # http://www.gnu.org/copyleft/gpl.html ; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
 
-import Yarrow.web
+import shelve
+import rgtp
+import common
 
-Yarrow.web.run_cgi()
+indexes_file = '/var/lib/yarrow/indexes'
+
+def index(name, rgtp_server):
+
+	mutex = common.mutex('indexes.lock')
+
+	mutex.get()
+	indexes = shelve.open(indexes_file)
+
+	current = None
+
+	if indexes.has_key(name):
+		# AND the version is current
+		# AND the datestamp is recent
+		current = indexes[name]
+		current.eat(rgtp_server.index(current.sequences()['all']+1))
+	else:
+		current = rgtp.interpreted_index()
+		current.eat(rgtp_server.index())
+
+	indexes[name] = current
+	indexes.close()
+	mutex.drop()
+
+	return current
