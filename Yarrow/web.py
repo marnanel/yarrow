@@ -1,8 +1,5 @@
-#!/usr/bin/python
-#
-#  yarrow - (yet another retro reverse-ordered website?)
-#  v0.40
-#
+"Web front end for Yarrow"
+
 # Copyright (c) 2002 Thomas Thurman
 # thomas@thurman.org.uk
 # 
@@ -94,24 +91,12 @@ def html_print(message, grogname, author, time, reformat):
 			# We're not reformatting, so just break at the ends of lines.
 			print '<br>'
 
-# FIXME: This should be in common.py.
-# FIXME: This should return a list of dictionaries.
-def all_known_servers():
-	"Returns a list of all known servers. At present, each one is a 4-tuple: name, host, port, description."
-	result = []
-	list = open("servers.dat")
-	while 1:
-		stuff = list.readline()
-		if not stuff:
-                	break
-		result.append(string.split(stuff, None, 3))
-	list.close()
-	return result
-
 ################################################################
 
 class read_handler:
+
 	def head(self, y):
+
 		try:
 			# fixme: This stat is wasteful. We can pick all this up from a[0].
 			self.status = y.connection.stat(y.item)
@@ -133,25 +118,38 @@ class read_handler:
 			if target:
 				try:
 					name = y.connection.stat(target)['subject']
-					print '<p><i>(' + title
-					print '<a href="' + prefix + y.server + '/' + target + anchor + '">' + name + '</a>)</i></p>'
+					print '<p><i>(%s <a href="%s/%s">%s</a>)</i></p>' % (
+						title,
+						prefix + y.server,
+						target + anchor,
+						name)
+
 				except rgtp.RGTPException:
-					print '<p><i>('+title+' item '+target+', which is no longer available.)</i></p>'
+					print """
+<p><i>(%s item %s, which is no longer available.)</i></p>""" % (title, target)
 
 		print '<h1>' + linkify(cgi.escape(y.title)) + '</h1>'
 		if self.item:
 			possibly_link(y, self, 'Continued from', 'from', '#end')
 			for i in self.item[1:]:
 				print '<a name="%x"></a>' %(i['sequence'])
-				html_print(i['message'], i['grogname'], i['author'], time.strftime("%a %d %b %Y %I:%M:%S %p", time.localtime(i['timestamp'])), y.reformat)
+				html_print(i['message'], i['grogname'],
+					i['author'],
+					time.strftime("%a %d %b %Y %I:%M:%S %p",
+						time.localtime(i['timestamp'])),
+					0) # FIXME: y.reformat
 				print '<a name="after-%x"></a>' %(i['sequence'])
+
 			possibly_link(y, self, 'Continued in', 'to', '')
+
+			print '<a name="end"></a>'
 
 			if y.connection.access_level > 1 and self.status['to']==None:
 				print '<hr>'
 				y.show_posting_box(self.status['replied'], 0)
 
-		print '<hr><i>(Return to <a href="' + prefix + y.server + '/browse">the ' + y.server + ' index</a>)</i>'
+		print '<hr><i>(Return to <a href="%s/browse">the %s index</a>)</i>' % (
+			prefix + y.server, y.server)
 
 		if y.user and not y.user.last_sequences.has_key(y.server):
 			y.user.last_sequences[y.server] = {} # Stop errors below...
@@ -217,14 +215,15 @@ def you_should_be_logged_in(y):
 	else:
 		# They're not logged in to yarrow. Can we give them satisfaction anyway?
 		if y.connection.access_level==0:
-			print '<p><b>Note:</b> You\'re not logged into yarrow,'
-			print 'and this server ('+y.server+') doesn\'t permit random'
-			print 'anonymous browsing. If you\'d like to browse, I suggest'
-			print 'you start by <a href="%ssys/newbie">setting up'%(prefix)
-			print 'a new yarrow account</a> (or, if you already have'
-			print 'one, by <a href="%ssys/login">logging in</a>).</p>'%(prefix)
+			print """
+<h1>Log in</h1>
+<p>You'll have to log in to yarrow, because the page you're trying to view
+comes from the %s server, which doesn't permit random anonymous
+browsing.</p>""" % (y.server)
+			login_form()
 			return 1
 
+		# They have guest access anyway, which is just about as good.
 		return 0
 
 ################################################################
@@ -238,7 +237,7 @@ class browse_handler:
 			return
 
 		# optionally (FIXME: honour switch)
-		print '<p><b>Message of the day:</b>'
+		print '<p>'
 		html_print(y.connection.motd()[1:], None, '', '', 1)
 		print '</p>'
 
@@ -326,8 +325,10 @@ class wombat_handler:
 ################################################################
 
 class post_handler:
+	"Handles both creating new items and replying to existing ones."
+
 	def head(self, y):
-		y.title = 'Post a new item to ' + y.server
+		y.title = 'Post a new item to %s' % (y.server)
 
 	def body(self, y):
 		if y.form.has_key('data'):
@@ -336,7 +337,7 @@ class post_handler:
 			self.form(y)
 
 	def submit(self, y):
-		submission_status = 0
+		submission_status = [0]
 
 		if y.form.has_key('from'):
 			name = y.form['from'].value
@@ -358,37 +359,44 @@ class post_handler:
 			# the item hasn't been continued, and its reply number
 			# matches a certain sequence number.
 			currently = y.connection.stat(y.item)
-			if currently['to'] or (int(y.form['sequence'].value,16) != currently['replied']):
-				submission_status = -1
+			if currently['to'] or \
+			   (int(y.form['sequence'].value,16) != currently['replied']):
+				submission_status[0] = -1
 
-		if submission_status==0: # Still OK to send stuff?
+		if submission_status[0]==0: # Still OK to send stuff?
 			y.connection.send_data(name, string.split(y.form['data'].value, '\r\n'))
 			submission_status = y.connection.post(item, subject)
 
-		if submission_status==-1:
-			print '<h1>Collision</h1>'
-			print '<p>Sorry, someone posted a reply in the time between'
-			print 'when you read the item and when you submitted your'
-			print 'reply. I suggest you go and read'
-			print '<a href="'+prefix+y.server+'/'+item+'">what\'s'
-			print 'changed</a> before you reply again.</p>'
-			# Tell them what they said. IE has a nasty habit of
+		if submission_status[0]==-1:
+			# Nope, someone's been there before us.
+			# We should tell them what they said. IE has a nasty habit of
 			# eating the contents of forms if you go back to them.
-			print '<p>For reference, you said:<blockquote>'
+			print """
+<h1>Collision</h1>
+<p>Sorry, someone posted a reply in the time between when you read the item
+and when you submitted your reply. I suggest you go and read
+<a href="%s/%s">what's changed</a> before you reply again.</p>
+<p>For reference, you said:<blockquote>""" % \
+	(prefix+y.server, item)
 			for line in string.split(y.form['data'].value,'\r\n'):
 				print line + '<br>'
 			print '</blockquote></p>'
-		elif submission_status==1:
+
+		elif submission_status[0]==1:
 			print '<h1>That item\'s full</h1>'
 			print '<p>You need to start a new item. Edit your text'
 			print 'if needs be, and think of an appropriate new subject'
 			print 'line.</p>'
 			y.show_posting_box(None, 1, y.form['data'].value)
+
 		else:
+			# Success! Work out the URL of the new posting.
 			print '<h1>Added comment</h1>'
 			print 'Your comment was added. You can view it'
-			print '<a href="'+prefix+y.server+'/'+submission_status+'">'
-			print 'here</a>.'
+			print '<a href="%s%s/%s#%x">here</a>.' % (
+				prefix, y.server,
+				submission_status[1],
+				submission_status[2])
 
 	def form(self, y):
 		print '<h1>Post a new item</h1>'
@@ -401,20 +409,21 @@ class editlog_handler:
 		y.title = y.server + ' edit log'
 
 	def body(self, y):
-		print '<h1>Edit log</h1>'
-		print '<p>Only editors have the power to change the entries that'
-		print 'other users have made on an RGTP server. When they do edit'
-		print 'something, it shows up here so that everyone can know that'
-		print 'a change has been made. Editors usually also add a note to'
-		print 'the item itself, to explain.</p>'
-		print '<table width="100%">'
-		print '<tr>'
-		print '<th class="index">Item</th>'
-		print '<th class="index">Date</th>'
-		print '<th class="index">Action</th>'
-		print '<th class="index">Editor</th>'
-		print '<th class="index">Reason</th>'
-		print '</tr>'
+		print """
+<h1>Edit log</h1>
+<p>Only editors have the power to change the entries that
+other users have made on an RGTP server. When they do edit
+something, it shows up here so that everyone can know that
+a change has been made. Editors usually also add a note to
+the item itself, to explain.</p>
+<table width="100%">
+<tr>
+<th>Item</th>
+<th>Date</th>
+<th>Action</th>
+<th>Editor</th>
+<th>Reason</th>
+</tr>"""
 
 		edits = y.connection.edit_log()
 
@@ -439,50 +448,11 @@ class editlog_handler:
 
 ################################################################
 
-class literal_handler:
-	def head(self, y):
-		y.title = 'Literal RGTP to ' + y.server
-
-	def body(self, y):
-		print '<h1>Literal RGTP: '+y.server+'</h1>'
-		print '<p>This is where you can type RGTP commands directly into the server:'
-		print 'yarrow will log you in if possible, and then send whatever you type'
-		print 'here to the server. Most people will never need to use this.'
-		print 'Bear in mind that every time you submit this page, it\'s a whole'
-		print 'separate RGTP session. Severe RGTP errors will stop the process'
-		print 'automatically.</p>'
-		print '<p>You probably want to have a look through'
-		print '<a href="http://www.groggs.group.cam.ac.uk/protocol.txt">the protocol'
-		print 'specification</a>; many servers also implement a HELP command.</p>'
-
-		if y.harvest('loggedin')=='1':
-			loggedin = 'checked'
-		else:
-			loggedin = ''
-
-		print '<form action="'+prefix+y.server+'/literal" method="get">'
-		# Why get? It's important that this activity is logged.
-		print '<textarea style="width: 99%" cols="50" class="textbox" rows="3" name="literal">'
-		print '</textarea>'
-		print 'Log me in first?'
-		print '(<b>Not honoured in this version; you\'re always logged in</b>)'
-		print '<input type="checkbox" name="loggedin" value="1" '+loggedin+'>'
-		print '<input type="submit" value=" Send "></form>'
-
-		sending = string.split(string.replace(y.harvest('literal'),"\r",""),'\n')
-		try:
-			y.connection.literal(sending)
-		except rgtp.RGTPException, r:
-			pass # they'll see about it in the log
-
-################################################################
-
 class config_handler:
 	def head(self, y):
 		y.title = 'How to access %s' % (y.server)
 
 	def body(self, y):
-		# FIXME: the submit / form dichotomy is a useful pattern. Replicate it.
 		if not y.user:
 			print '<p>Sorry, you can\'t set the options for'
 			print 'individual servers unless you'
@@ -607,7 +577,8 @@ class config_handler:
 		# work anyway? Should it? Find out.]
 
 		if userid:
-			test_connection = rgtp.fancy(y.server_details[1], int(y.server_details[2]), 0)
+			test_connection = rgtp.fancy(y.server_details['host'],
+				y.server_details['port'], 0)
 			try:
 				# We need at least a 1.
 				test_connection.raise_access_level(1, userid, secret)
@@ -656,7 +627,9 @@ class config_handler:
 
 		y.user.save()
 
-		print '<p>You probably want to go and <a href="%s/browse">read some gossip</a> now.</p>' % (prefix+y.server)
+		print """
+<p>You probably want to go and <a href="%s/browse">read
+some gossip</a> now.</p>""" % (prefix+y.server)
 
 ################################################################
 
@@ -674,59 +647,87 @@ class unknown_command_handler:
 
 ################################################################
 
+def login_form(submit_to = None):
+
+	if submit_to == None:
+		submit_to = os.environ['REQUEST_URI']
+
+	print """
+<p>Enter your yarrow username and password here. You're logging into yarrow
+as a whole here, rather than into any particular RGTP server; this means
+that you can access your RGTP shared-secrets from any computer connected
+to the Internet. If you don't have a yarrow account, you may
+<a href="%ssys/newbie">get a new account</a> here.</p>
+
+<form action="%s" method="post"><table>
+<tr><td>Username:</td> <td><INPUT TYPE="text" NAME="user"></td></tr>
+<tr><td>Password:</td> <td><INPUT TYPE="password" NAME="password">
+ <a href="%ssys/resetpass">(Forget?)</a> </td></tr>
+<tr><td>Remember my login on this computer</td>
+ <td><INPUT TYPE="checkbox" CHECKED NAME="remember"></td></tr>
+<tr><td colspan="2" align="right"><input type="submit" value=" OK "></td></tr>
+</table></form>""" % (prefix, submit_to, prefix)
+
+################################################################
+
+#FIXME: This is called only from one place, so probably should be moved.
+def handle_potential_logging_in(y):
+	"""Many pages give the user the chance to log in (by calling login_form())
+if the user isn't currently logged in; such login forms submit to the current
+page, so that on success we can go back there. Such pages need to call this
+function from their 'head()' to handle it if the user is logging in. Returns
+'accepted' if the user was logged in successfully, 'failed' if they weren't,
+and 'not' if the user wasn't attempting to log in."""
+
+	if y.form.has_key('password') and y.form.has_key('user'):
+		# OK, so they're logging in.
+		possible = user.from_name(y.form['user'].value)
+		if possible and possible.password_matches(y.form['password'].value):
+
+			if y.form.has_key('remember') and y.form['remember']:
+				expiry = 60*60*24*365*10 # Ten years or so
+			else:
+				expiry = 0 # As soon as you close the browser
+
+			y.accept_user(possible, 1, expiry)
+			return 'accepted'
+		else:
+			return 'failed'
+	else:
+		return 'not'
+
+################################################################
+
+class login_failure_handler:
+	def head(self, y):
+		y.title = "Login failed!"
+
+	def body(self, y):
+		print '<h1>Password failure</h1>'
+		print '<p>That\'s not your password!</p>'
+
+################################################################
+
 class login_handler:
 	def head(self, y):
 		y.title = "Log in to yarrow"
-		if y.form.has_key('password') and y.form.has_key('user'):
-			possible = user.from_name(y.form['user'].value)
-			if possible and possible.password_matches(y.form['password'].value):
-
-				if y.form.has_key('remember') and y.form['remember']:
-					expiry = 60*60*24*365*10 # Ten years or so
-				else:
-					expiry = 0 # As soon as you close the browser
-
-				y.accept_user(possible, 1, expiry)
-				self.result = 'ok'
-			else:
-				self.result = 'fail'
-		else:
-			self.result = 'genesis'
 
 	def body(self, y):
-		if self.result=='ok':
+		if y.logging_in_status=='accepted':
+			# Since all they asked for was to log in, we needn't take them
+			# straight to any particular page.
 			print '<h1>Logged in</h1>'
 			print '<p>You\'re now logged in. You probably want to go and look for'
 			print '<a href="'+prefix+y.server+'/server">some gossip</a>'
 			print 'to read now.</p>'
 
 			# FIXME: Add warning about "permanent" logins if you're using
-			# a public terminal
+			# a public terminal?
 
-		elif self.result=='fail':
-			print '<h1>Password failure</h1>'
-			print '<p>That\'s not your password!</p>'
+		# Can't be "failed". That would have been picked up already.
 		else:
 			print '<h1>Log in to yarrow</h1>'
-			print '<p>Enter your yarrow username and password here. You\'re'
-			print 'logging into yarrow as a whole here, rather than into any'
-			print 'particular RGTP server; this means that you can access'
-			print 'your RGTP shared secrets from any computer connected'
-			print 'to the Internet. If you don\'t'
-			print 'have a yarrow account, you may <a href="'+prefix+'sys/newbie">get'
-			print 'a new account</a> here.</p>'
-			print '<p><form action="'+prefix+'sys/login" method="post"><table>'
-			print '<tr><td>Username:</td>'
-			print '<td><INPUT TYPE="text" NAME="user"></td></tr>'
-			print '<tr><td>Password:</td>'
-			print '<td><INPUT TYPE="password" NAME="password">'
-			print '<a href="'+prefix+y.server+'/resetpass">(Forget?)</a>'
-			print '</td></tr>'
-			print '<tr><td>Remember my login on this computer</td>'
-			print '<td><INPUT TYPE="checkbox" CHECKED NAME="remember"></td></tr>'
-			print '<tr><td colspan="2" align="right">'
-			print '<input type="submit" value=" OK "></td></tr>'
-			print '</table></form></p>'
+			login_form()
 
 ################################################################
 
@@ -734,10 +735,12 @@ class logout_handler:
 	def head(self, y):
 		y.title = "Log out of yarrow"
 		y.clear_session()
+		y.user = None
 
 	def body(self, y):
-		print '<h1>Logged out</h1>'
-		print '<p>You\'re now logged out.</p>'
+		print """
+<h1>Logged out</h1>
+<p>You're now logged out.</p>"""
 
 ################################################################
 
@@ -928,18 +931,21 @@ class server_chooser_handler:
 		print '<th class="index">Description</th>'
 		print '<th class="index">Your settings</th></tr>'
 
-		for stuff in all_known_servers():
-			print '<tr>'
-			print '<td><a href="'+prefix+stuff[0]+'/browse">'+stuff[0]+'</a></td>'
-			print '<td>'+stuff[3]+'</td>'
-			print '<td>'
+		servers = config.all_known_servers()
+		server_names = servers.keys()
+		server_names.sort()
+
+		for server in server_names:
+			print '<tr><td><a href="%s/browse">%s</a></td><td>%s</td><td>' % (
+				prefix+server, server, servers[server]['description'])
+
 			if y.user:
-				userid = y.user.state(stuff[0], 'userid', '')
+				userid = y.user.state(server, 'userid', '')
 				if userid!='':
 					print userid
 				else:
 					print '<i>unknown</i>'
-				print '[<a href="'+prefix+stuff[0]+'/config">change</a>]'
+				print '[<a href="'+prefix+server+'/config">change</a>]'
 			else:
 				print '<i>not logged in</i>'
 			print '</td>'
@@ -1020,18 +1026,21 @@ class regu_handler:
 				print '<h2>Account creation failed</h2>'
 			print '<p><i>' + result[1] + '</i></p>'
 			if result[0]:
-				print '<p>Check your email for a message from the %s server.</p>' % (y.server)
-			print '<p>If you\'d like to contact a human to'
-			print 'discuss this, the Editors\' email addresses are usually'
-			print 'listed in <a href="'+prefix+y.server+'/motd/">the'
-			print 'server\'s message of the day</a>.</p>'
+				print '<p>Check your email for a message\
+from the %s server.</p>' % (y.server)
+
+			print """
+<p>If you'd like to contact a human to discuss this, the Editors' email
+addresses are usually listed in <a href="%s/motd/">the server's
+message of the day</a>.</p>""" % (prefix+y.server)
 		else:
 			# they haven't given us a username. So we give them a form
 			# to fill in. Firstly, get the warning text, by doing an
 			# account request and then bailing before we give them a
 			# name.
 			warning = y.connection.request_account(None)
-			print '<table align="center"><tr><td><img src="/exclamation" width="36" height="35" alt="/!\\"></td><td>'
+			print '<table align="center"><tr><td>\
+<img src="/exclamation" width="36" height="35" alt="/!\\"></td><td>'
 			print '<b>Please read this before continuing:</b><br><br>'
 			for line in warning:
 				print cgi.escape(line) + '<br>'
@@ -1056,7 +1065,7 @@ class catchup_handler:
 			# wherever we were when the user read the index last.
 			# The difference is a few seconds, usually, but might
 			# be significant occasionally. I'm not sure what we
-			# could do about it, though.
+			# should do about it, though.
 
 			y.user.last_sequences[y.server] = \
 				cache.index(y.server, y.connection).sequences()
@@ -1070,7 +1079,8 @@ class catchup_handler:
 			print '<input type="submit" value=" I mean it! "></form>'
 			print '<p>Or you could just'
 
-		print 'go back to <a href="%s/browse">the %s index</a>.</p>' % (prefix+y.server, y.server)
+		print 'go back to <a href="%s/browse">the %s index</a>.</p>' % (
+			prefix+y.server, y.server)
 
 ################################################################
 
@@ -1078,16 +1088,29 @@ class yarrow:
 	"A CGI interface for RGTP."
 
 	form = cgi.FieldStorage()
+
+	# Title of the HTML page.
 	title = 'Reverse Gossip'
+
 	server = '' # FIXME: replace with server_details[n] -- or make that a dictionary?
 	verb = ''
+
+	static_prefix = config.value('web', 'static-prefix')
+
+	################################################################
+	# Cookie time:
+
 	if os.environ.has_key('HTTP_COOKIE'):
 		# They've sent us some cookies; better read them.
 		incoming_cookies = Cookie.SimpleCookie(os.environ['HTTP_COOKIE'])
 	else:
 		# No cookies. Start with a blank sheet.
 		incoming_cookies = Cookie.SimpleCookie()
+
+	# Set up a cookie list ready for sending new ones.
 	outgoing_cookies = Cookie.SimpleCookie()
+
+	################################################################
 
 	def accept_user(self, user, add_cookies=0, cookie_expiry=0):
 		"Sets the current user to be |user|, and optionally adds appropriate cookies."
@@ -1113,17 +1136,22 @@ class yarrow:
 			"Picks a suitable grogname for the current user."
 			names = y.user.state(y.server, 'grogname', [])
 			if names==[]:
-				# Not sure what to do here. Probably best to return ''.
+				# Not sure what to do here.
+				# Probably best to return ''.
 				return ''
 			else:
-				return random.choice(names) # Don't you just love Python?
+				# Don't you just love Python?
+				return random.choice(names)
 
 		# self.user must be defined in order to get here!
-		print 'From <input type="text" name="from" value="'+cgi.escape(suitable_grogname(self), 1)+'"'
-		print 'style="width: 99%"><br>'
+		print 'From <input type="text" name="from" value="'+\
+			cgi.escape(suitable_grogname(self), 1)+\
+			'" style="width: 99%"><br>'
 		if show_subject:
-			print 'Subject <input type="text" name="subject" value="" style="width: 99%"><br>'
-		print 'Message <textarea style="width: 99%" cols="50" class="textbox" rows="10" name="data">'
+			print 'Subject <input type="text" name="subject" '+\
+				'value="" style="width: 99%"><br>'
+		print 'Message <textarea style="width: 99%" cols="50" '+\
+			'class="textbox" rows="10" name="data">'
 		if textblock:
 			print textblock
 		print '</textarea>'
@@ -1135,61 +1163,40 @@ class yarrow:
 		def meta_field(y, field):
 			return y.user.state(y.server, field, None)
 
-		# FIXME: Peter Colledge asks that this also matches on
-		#    hostname -- if port==rgtp
-		#    hostname:port
 		if self.server!='' and self.server!='sys':
-			for name in all_known_servers():
-				if name[0]==self.server:
-					self.server_details = name
-					connection = rgtp.fancy(name[1], int(name[2]), self.log)
-					if self.verb!='newbie': # ugh, ugly hack
-						if self.user:
-							connection.raise_access_level(None, meta_field(self, 'userid'), meta_field(self, 'secret'))
-						else:
-							connection.raise_access_level()
-					return connection
-			raise rgtp.RGTPException(self.server + ' is not a known server')
+			server = config.server_details(self.server)
+			self.server_details = server
+			connection = rgtp.fancy(server['host'],
+				server['port'], 0) # 0=logging...FIXME
+			if self.verb!='newbie': # ugh, ugly hack
+				if self.user:
+					connection.raise_access_level(None,
+						meta_field(self, 'userid'),
+						meta_field(self, 'secret'))
+				else:
+					connection.raise_access_level()
+			return connection
 
 	def print_headers(self):
 		print self.outgoing_cookies
 		print
-		print '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">'
-		
-		print '<HEAD><TITLE>' + self.title + '</TITLE>'
-	
-		print '<style type="text/css"><!--'
-		print '@import "%syarrow.css";' % (config.http_static_prefix)
-		print '--></style>'
-		print '<link rel="SHORTCUT ICON" href="%sfavicon.ico">' \
-			% (config.http_static_prefix)
-		print '</head>'
-	
-		print '<body>'
+		print """
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<head><title>%s</title>
+<style type="text/css"><!--
+@import "%snew-yarrow.css";
+--></style>
+<link rel="shortcut icon" href="%sfavicon.ico">
+</head><body><div class="content">""" % (
+		self.title,
+		self.static_prefix,
+		self.static_prefix)
 
-		print '<div class="status">'
-		print '<img src="%sreverse-gossip.gif" height="64"\
-width="294" alt="Reverse Gossip" align="right">' % (config.http_static_prefix)
-
-		if self.server!='':
-			if self.server!='sys':
-				print '<a href="'+prefix+'"><b>this is:</b></a> ' + self.server + '<br>'
-
-			print '<a href="'+prefix+'sys/login"><b>you are:</b></a>'
-
-			if self.user:
-				print str(self.user) + '<br>'
-			else:
-				print '<i>not logged in</i><br>'
-
-		print '<a href="http://rgtp.thurman.org.uk/yarrow"><b>client:</b></a>'
-		print config.version
-
-		print '</div>'
-
+	def print_footers(self):
 		# The sidebar.
 
-		print '<div class="menu">'
+		print '</div><div class="menu">'
 		if self.server!='' and self.server!='sys':
 			print '<h1>%s</h1>' % (self.server)
 			self.serverlink('browse','browse')
@@ -1200,7 +1207,6 @@ width="294" alt="Reverse Gossip" align="right">' % (config.http_static_prefix)
 			print '<br>'
 			self.serverlink('motd','status')
 			self.serverlink('editlog', 'show&nbsp;edits');
-			self.serverlink('literal','literal&nbsp;rgtp');
 			# FIXME: regu link?
 
 		print '<h1>general</h1>'
@@ -1220,7 +1226,9 @@ width="294" alt="Reverse Gossip" align="right">' % (config.http_static_prefix)
 		print '<a href="http://validator.w3.org/check/referer">valid&nbsp;HTML</a><br>'
 		print '<a href="http://jigsaw.w3.org/css-validator/check/referer">valid&nbsp;CSS</a><br>'
 		print '</div>'
-		print '<div class="content">'
+
+		print '</BODY></HTML>'
+
 	
 	def maybe_print_logs(self):
 		if not self.connection or not self.connection.base.logging:
@@ -1279,11 +1287,6 @@ width="294" alt="Reverse Gossip" align="right">' % (config.http_static_prefix)
 		else:
 			self.user = None
 
-		# legacy (remove later)
-		self.usenc = 0
-		self.reformat = 0
-		self.log = 0
-
 		if self.item!='' and self.verb=='':
 			self.verb = 'read' # implicit for items
 
@@ -1295,10 +1298,13 @@ width="294" alt="Reverse Gossip" align="right">' % (config.http_static_prefix)
 				# they're coming in on the main page).
 				self.verb = 'server'
 
-		# As a special case, the "literal" task requires logging.
-		if self.verb == 'literal':
-			self.log = 1
 		# FIXME: there is _no_ support for logging anywhere any more! make some!
+
+		# Many pages can print the login form, and that form submits
+		# back to the same page (so that if it works, you can go
+		# straight to what you were asking for). It makes sense to
+		# handle the logging in globally.
+		self.logging_in_status = handle_potential_logging_in(self)
 
 	tasks = {
 		'read': read_handler,
@@ -1307,7 +1313,6 @@ width="294" alt="Reverse Gossip" align="right">' % (config.http_static_prefix)
 		'wombat': wombat_handler,
 		'post': post_handler,
 		'editlog': editlog_handler,
-		'literal': literal_handler,
 		'config': config_handler,
 		'newbie': regu_handler,
 		'catchup': catchup_handler,
@@ -1324,19 +1329,37 @@ width="294" alt="Reverse Gossip" align="right">' % (config.http_static_prefix)
 	}
 
 	def begin_tasks(self):
-		"Start working on a task as soon as we know what it is, before the HTML starts printing."
+		"""Starts working on a task as soon as we know what it is,
+before the HTML starts printing."""
+
+		# Okay, find all the things they could ask for.
+
 		if self.server=='sys':
+			# "sys" is magic, not a real server; get the list for "sys".
 			tasklist = self.sys_tasks
 		else:
 			tasklist = self.tasks
 
 		if self.verb=='':
+			# They didn't say what they wanted to do,
+			# so give them a list.
 			self.verb_handler = verb_listing_handler(tasklist)
 		elif tasklist.has_key(self.verb):
+			# Ah, we know about what they wanted to do.
+			# Create them a handler to do it for them.
 			self.verb_handler = tasklist[self.verb]()
 		else:
+			# No idea about that. Use the handler that tells them
+			# that we don't understand.
 			self.verb_handler = unknown_command_handler(self.verb)
 
+		if self.logging_in_status=='failed':
+			# They did try to log in, but it failed.
+			# Use a special verb handler to tell them so.
+			self.verb_handler = login_failure_handler()
+
+		# Lastly, the handler itself probably wants to do some amount
+		# of setup. Call it.
 		self.verb_handler.head(self)
 
 	def finish_tasks(self):
@@ -1347,6 +1370,7 @@ rgtp_connection = yarrow()
 
 def run_cgi():
 	"Carry out the job of yarrow run as a CGI script."
+
 	print "Content-Type: text/html"
 
 	rgtp_connection.decide_tasks()
@@ -1356,6 +1380,7 @@ def run_cgi():
 		rgtp_connection.begin_tasks()
 		rgtp_connection.print_headers()
 		rgtp_connection.finish_tasks()
+		rgtp_connection.print_footers()
 	except:
 		print
 		print "<h1>Something went wrong there.</h1>"
@@ -1367,6 +1392,4 @@ def run_cgi():
 		sys.exit(255)
 
 	rgtp_connection.maybe_print_logs()
-
-	print '<a name="end"></a></div></BODY></HTML>'
 

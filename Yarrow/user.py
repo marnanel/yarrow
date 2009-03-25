@@ -98,19 +98,21 @@ class user:
 		the_password = common.random_hex_string(8) # not the MD5 hash!
 		self.set_password(the_password)
 
+		sent_from = config.value('general','mail-from')
 		sent_to = self.username
+
 		message = ("From: %s\r\nTo: %s\r\n\
 Subject: yarrow password\r\n\
 Delivered-By-The-Graces-Of: yarrow\r\n\r\n\
 You have requested a new password on the yarrow server. \
 It has been reset to %s.\r\n\r\n\
 Thank you for using yarrow.\r\n" % \
-			(config.mail_source_address,
+			(sent_from,
 			sent_to,
 			the_password))
 
 		mail = smtplib.SMTP('localhost')
-		mail.sendmail(config.mail_source_address,sent_to, message)
+		mail.sendmail(sent_from, sent_to, message)
 		mail.quit()
 
 def from_name(username):

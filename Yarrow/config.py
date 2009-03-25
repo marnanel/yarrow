@@ -20,23 +20,40 @@
 # http://www.gnu.org/copyleft/gpl.html ; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
 
-# This should mostly end up in a file such as /etc/yarrow.conf.
+import ConfigParser
+import string
 
-# The version of yarrow this is.
-version = 'yarrow 0.40'
+settings = ConfigParser.ConfigParser()
+settings.read('/etc/yarrow.conf')
 
-# Prefix for linking to HTTP stuff that never changes. At present this is:
-#   - the CSS
-#   - reverse-gossip.gif
-#   - favicon.ico
-# Must end with a slash.
-http_static_prefix = '/'
+def value(section, option):
+	return settings.get(section, option)
 
-# Source address for yarrow mail (sent when they set up a new account
-# or change their password.)
+# FIXME: Peter Colledge asks that this also matches on
+#    hostname -- if port==rgtp
+#    hostname:port
+def server_details(name):
+	section = name+'-server'
 
-# You can use yarrow@thurman.org.uk if you like,
-# but you probably want to pick something else.
+	if not settings.has_section(section):
+		raise Exception(self.server + ' is not a known server')
 
-mail_source_address = 'yarrow@thurman.org.uk'
+	address = string.split(value(section, 'address'), ':')
+	if len(address)>1:
+		port = int(address[1])
+	else:
+		port = 1431
+	return {
+		'host': address[0],
+		'port': port,
+		'description': value(section, 'description')}
 
+def all_known_servers():
+	result = {}
+
+	for candidate in settings.sections():
+		if candidate[-7:]=='-server':
+			name = candidate[:-7]
+			result[name] = server_details(name)
+
+	return result

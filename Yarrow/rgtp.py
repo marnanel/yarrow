@@ -1,8 +1,5 @@
-#!/usr/bin/python
-#
-#  rgtp.py - RGTP client library
-#  v0.02
-#
+"RGTP client library."
+
 # Copyright (c) 2002 Thomas Thurman
 # thomas@thurman.org.uk
 # 
@@ -83,15 +80,24 @@ class response:
 ###########################################################
 
 class callback:
+	"The 'base' class gives RGTP messages to callbacks of this form."
+
 	def __call__(self, message):
+		"""Deals with an incoming RGTP message.
+|message| is of type Message."""
 		pass
 
 	def done(self):
+		"""Returns 1 iff 'base' can throw this callback away now.
+This will not be checked until __call__() has been called at least once."""
 		return 1
 
 ###########################################################
 
 class expect(callback):
+	"""Callback that expects a message with a certain RGTP code number;
+the callback finishes quietly if the first message has that number, and
+throws an exception if it does not."""
 	def __init__(self, expectation):
 		self.desideratum = expectation
 
@@ -486,43 +492,52 @@ class fancy:
 		self.base.send('DATA', dumper(grogname, message, self.base))
 
 	def post(self, item, subject):
-		# If item is None, this is a NEWI.
-		# If item is not None and subject is None, this is a REPL.
-		# If item is not None and subject is not None, this is a CONT.
-		#
-		# Returns:
-		#  -1 -- failure because this item has been edited
-		#   1 -- failure because this item is full now; you must CONT
-		# a string -- success. the string is the itemid
-		# (Is this ugly? Maybe we should return a tuple.)
-		#
-		# Obviously not all these can be returned in all cases.
-		# You should check for the item having been edited already
-		# yourself, as well, and not just rely on this function
-		# returning -1; there are cases this function won't pick up
-		# (such as editing which doesn't cause continuation). 
+		"""
+If item is None, this is a NEWI.
+If item is not None and subject is None, this is a REPL.
+If item is not None and subject is not None, this is a CONT.
+
+Returns a 3-tuple.
+
+result[0]:
+ -1 -- failure because this item has been edited
+  1 -- failure because this item is full now; you must CONT
+  0 -- success.
+
+Obviously not all these can be returned in all cases.
+
+result[1]: the itemid.
+result[2]: the sequence number.
+
+You should check for the item having been edited already
+yourself, as well, and not just rely on result[0] being
+-1; there are cases this function won't pick up (such as
+editing which doesn't cause continuation)."""
 
 		class item_generator(multiline):
 			def __init__(self, itemid):
                                 multiline.__init__(self)
-				self.itemid = itemid
-				self.already_edited_status = 0
+				self.result = [0, itemid, None]
 
 			def __call__(self, message):
 				if message.code()==120:
 					# A new itemid for us.
-					self.itemid = message.text()
+					self.result[1] = message.text()
 				elif message.code()==122:
+					# continuation information
+					# (it'll go to 422, below)
 					pass # for now. hmm.
 				elif message.code()==220:
+					self.result[2] = int(
+						message.text()[:8],16)
 					# woohoo! all done
 					self.complete()
 				elif message.code()==421:
-					self.already_edited_status = 1
+					self.result[0] = 1
 					self.complete()
 				elif message.code()==422:
 					# it's overflowed!
-					self.already_edited_status = -1
+					self.result[0] = -1
 					self.complete()
 				else:
 					raise("Wasn't expecting " + str(message))
@@ -533,16 +548,14 @@ class fancy:
 		else:
 			self.base.send('REPL '+item, towel)
 
-			if towel.already_edited_status==1 and subject!=None:
+			if towel.result[0]==1 and subject!=None:
+				# ah, we don't need to return an error:
 				# we were given a subject in case this happened.
 				# Use it.
 				towel = item_generator(item)
 				self.base.send('CONT '+subject, towel)
 
-		if towel.already_edited_status == 0:
-			return towel.itemid
-		else:
-			return towel.already_edited_status
+		return towel.result
 
 	def edit_log(self):
 		class edit_log_reader(multiline):
@@ -589,7 +602,9 @@ class fancy:
 		return towel.result
 
 	def diff(self, itemid):
-		"Returns the changes made by an editor to an item. |itemid| may be None, in which case the index is diffed."
+		"""
+Returns the changes made by an editor to an item.
+|itemid| may be None, in which case the index is diffed."""
 		class diff_reader(multiline):
 			def __init__(self):
 				multiline.__init__(self)
@@ -621,11 +636,11 @@ class fancy:
 
 ################################################################
 
-# bah. explain this. i don't feel like explaining it atm.
-
 # need to add fields for:
 # datestamp of last eat()
 class interpreted_index:
+	"bah. explain this. i don't feel like explaining it atm."
+
 	def __init__(self):
 		self.index = {}
 		self.last_sequences = { 'all': 0 }
@@ -639,7 +654,7 @@ class interpreted_index:
 				self.last_sequences['all'] = sequence
 
 			# is there ever any possibility of lowercase here? check protocol
-			if line[4]=='I' or line[4]=='R' or line[4]=='C' or line[4]=='F':
+			if line[4] in ['I','R','C','F']:
 				if not self.index.has_key(line[2]):
 					self.index[line[2]] = {'date': 0, 'count': 0, 'subject': 'Unknown', 'live': 1 }
 					self.last_sequences[line[2]] = 0
@@ -647,7 +662,7 @@ class interpreted_index:
 				if line[4]!='F' and sequence > self.last_sequences[line[2]]:
 					self.last_sequences[line[2]] = sequence
 
-				if line[4]=='I' or line[4]=='C':
+				if line[4] in ['I','C']:
 					self.index[line[2]]['subject'] = line[5]
 
 				if self.index[line[2]]['date'] < int(line[1],16):

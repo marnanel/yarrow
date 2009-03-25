@@ -1,0 +1,37 @@
+#!/usr/bin/python
+
+from Yarrow.rgtp import fancy
+
+connection = fancy("rgtp-serv.groggs.group.cam.ac.uk", 1431, 0)
+connection.login("guest", "")
+dates = []
+
+for line in connection.index():
+	if line[4] in ['I', 'R', 'C']:
+		dates.append(int(line[1], 16))
+
+dates.sort() # should be anyway
+
+days = 60*60*24
+period = 7 * days
+overthelast = 7*days # 31 * days
+
+start = (dates[0]/period)
+end = (dates[-1]/period) +1
+
+count = 0
+decPointer = 0
+incPointer = 0
+
+for day in range(start, end):
+	date = day*period
+	while dates[incPointer]<date:
+		count=count+1
+		incPointer=incPointer+1
+
+	while dates[decPointer]<(date-overthelast):
+		count=count-1
+		decPointer=decPointer+1
+
+	print "%f %d" % (70+date/days/365.4, count)
+

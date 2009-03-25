@@ -1,6 +1,6 @@
 #!/usr/bin/python
-#
-#  yarrow - (yet another retro reverse-ordered website?)
+"yarrow - (yet another retro reverse-ordered website?)"
+
 #  v0.40
 #
 # Copyright (c) 2002 Thomas Thurman
