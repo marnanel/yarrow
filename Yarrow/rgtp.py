@@ -200,7 +200,7 @@ class stomach(multiline):
 class base:
 	"Basic RGTP handling."
 
-	def __init__(self, host, port, cback, logging):
+	def __init__(self, host, port, cback, logging=1, encoding='iso-8859-1'):
 		self.logging=logging
 		self.log=''
 		self.state = 0
@@ -208,7 +208,11 @@ class base:
 		sock.connect((host, port))
 		self.incoming = sock.makefile("r")
 		self.outgoing = sock.makefile("w")
-		self.cback = cback
+		self.encoding = encoding
+		if encoding=='utf-8':
+			self.cback = cback
+		else:
+			self.cback = lambda x: cback(x.decode(self.encoding).encode('utf-8'))
 		self.get_line()
 
 	def get_line(self):
@@ -248,7 +252,10 @@ class base:
 	def send(self, message, cback):
 		"Sends one line to the server, and waits for a response."
 		self.cback = cback
-		self.raw_send(message)
+		if self.encoding=='utf-8':
+			self.raw_send(message)
+		else:
+			self.raw_send(message.decode('utf-8').encode(self.encoding))
 		self.get_line()
 
 ###########################################################
