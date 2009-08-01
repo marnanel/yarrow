@@ -1367,12 +1367,60 @@ class rgtp_failure_handler:
 ################################################################
 
 class login_handler:
+	def handle_potential_logging_in(self, y):
+		"""Many pages give the user the chance to log in
+		(by calling login_form()) if the user isn't currently
+		logged in; such login forms submit to the current
+		page, so that on success we can go back there. Such
+		pages need to call this function from their 'head()'
+		to handle it if the user is logging in. Returns
+		'accepted' if the user was logged in successfully,
+		'failed' if they weren't,
+		and 'not' if the user wasn't attempting to log in."""
+
+		# FIXME: When the dust of adding "visitors" has
+		# settled, find whether this is really as common
+		# as it used to be.
+
+		visiting = y.form.has_key('visiting') and y.is_post_request()
+
+		username = secret = None
+
+		if visiting:
+			username = 'Visitor'
+		elif y.form.has_key('user'):
+			# hmm, confusing name
+			username = y.form['user'].value.lower()
+
+		if y.form.has_key('secret'):
+			secret = y.form['secret'].value
+
+		if visiting or secret:
+			# OK, so they're logging in.
+			possible = user.from_userid_and_secret(username, secret, y.server)
+
+			if possible:
+				if (not visiting) and y.form.has_key('remember') and y.form['remember'].value:
+					# Ten years or so
+					expiry = 60*60*24*365*10
+				else:
+					# As soon as you
+					# close the browser
+					expiry = 0
+						
+				y.accept_user(possible, 1, expiry)
+				return 'accepted'
+			else:
+				return 'failed'
+		else:
+			return 'not'
+
 	def head(self, y):
-		y.title = "Log in to yarrow"
+		y.title = "Log in to "+y.server
+		self.status = self.handle_potential_logging_in(y)
 
 	def body(self, y):
-
-		if y.logging_in_status=='accepted':
+		if self.status=='accepted':
 			# Since all they asked for was to log in,
 			# we needn't take them straight to any
 			# particular page.
@@ -1392,30 +1440,28 @@ class login_handler:
 				      y.uri(None, None) +\
 				      '">some gossip</a> to read.</p>'
 
-		# Can't be "failed". That would have been picked up already.
+		elif self.status=='failed':
+			print '<h1>Login failed</h1>'+\
+			    '<p>You can either <a href="'+y.uri('login')+\
+			    '">try again</a>, '+\
+			    'or <a href="'+y.uri('motd')+'">ask the Editors '+\
+			    'for help</a>.</p>';
 		else:
-			print '<h1>Log in to yarrow</h1>'+\
-			      '<p>Enter your yarrow username and password '+\
-			      'here. If you don\'t have a username and  '+\
-			      'password, you may <a href="%s">' % (
-				      y.uri('newbie', 'sys'),
-				      ) +\
-			      'get them</a> here.</p>' +\
-			      '<p>You\'re logging into yarrow '+\
-			      'as a whole here, rather than into any '+\
-			      'particular RGTP server; this means '+\
-			      'that Yarrow will behave the same way for '+\
-			      'you, from any computer connected '+\
-			      'to the Internet.</p>' +\
+			# not trying to log in; invite them to try
+			print '<h1>Log in to '+y.server+'</h1>'+\
+			      '<p>Please enter your '+y.server+' user ID and shared '+\
+			      'secret.</p>'+\
 			      '<form action="' +\
 			      y.uri('login') +\
 			      '" method="post">' +\
 			      '<table>' +\
-			      '<tr><td>Username:</td> '+\
-			      '<td><INPUT TYPE="text" NAME="user"></td></tr>' +\
-			      '<tr><td>Password:</td> '+\
-			      '<td><INPUT TYPE="password" '+\
-			      'NAME="password"></td></tr>' +\
+			      '<tr><td>User ID (looks like "spqr1@cam.ac.uk"):</td> '+\
+			      '<td><INPUT TYPE="text" NAME="user"></td>'+\
+			      '</tr>' +\
+			      '<tr><td>Shared secret (looks like "E12AB567CD"):</td> '+\
+			      '<td><INPUT TYPE="text" '+\
+			      'NAME="secret"></td>'+\
+			      '</tr>' +\
 			      '<tr><td>Remember my login ' +\
 			      'on this computer.</td>' +\
 			      '<td><INPUT TYPE="checkbox" ' +\
@@ -1424,7 +1470,15 @@ class login_handler:
 			      'unless you\'re using a public workstation.) ' +\
 			      '</td></tr><tr><td colspan="2" align="right">' +\
 			      '<input type="submit" value=" OK "></td></tr>' +\
-			      '</table></form><p>You will need cookies ' +\
+			      '</table></form>'+\
+			      '<p>If you don\'t have a user ID on '+y.server+\
+			      ', you may <a href="'+y.uri('newbie')+'">get one '+\
+			      'here.</a></p>'+\
+			      '<p>If you have a user ID on '+y.server+\
+			      ', but have forgotten it, please <a href="'+y.uri('motd')+\
+			      '">contact the Editors</a>, who will be happy to '+\
+			      'assist you.</p>'+\
+			      '<p>You will need cookies ' +\
 			      'enabled from here on in.</p>'
 
 ################################################################
@@ -1439,186 +1493,6 @@ class logout_handler:
 		print """
 <h1>Logged out</h1>
 <p>You're now logged out.</p>"""
-
-################################################################
-
-class change_password_handler:
-	"""Allows the user to change their password."""
-	
-	def head(self, y):
-		"""Performs any requested actions, and sets
-		self.result according to the outcome."""
-		
-		y.title = "Change your yarrow password"
-
-		if y.is_post_request() \
-		   and y.is_real_user() \
-		   and y.form.has_key('user') \
-		   and y.form.has_key('password') \
-		   and y.form.has_key('newpass1') \
-		   and y.form.has_key('newpass2'):
-			
-			candidate = user.from_name(y.form['user'].value.lower())
-			if candidate==None or \
-			   not candidate.password_matches(y.form['password'].value):
-				self.result = 'badpass'
-			elif y.form['newpass1'].value!=y.form['newpass2'].value:
-				self.result = 'nomatch'
-			else:
-				candidate.set_password(y.form['newpass2'].value)
-				candidate.save()
-
-				y.accept_user(candidate, 1)
-				
-				self.result = 'ok'
-		else:
-			self.result = 'showform'
-
-	def body(self, y):
-		"""Prints the body text for this page. Because all the hard\
-work has already been done, this just prints text according to the value of\
-self.result."""
-
-		if not y.is_real_user():
-			print '<h1>Not logged in</h1>'+\
-			      'You need to be logged in before '+\
-			      'you can change your password!'
-		elif self.result=='badpass':
-			print '<h1>Verification problem</h1>'
-			print '<p>Either I couldn\'t find a user with the name you gave,'
-			print 'or the old password you gave was wrong (and I\'m'
-			print 'certainly not going to tell you which one it was).'
-			print '<a href="'+y.uri('newpass')+'">Try again?</a></p>'
-		elif self.result=='nomatch':
-			print '<h1>The new passwords didn\'t match</h1>'
-			print '<p>Silly person.'
-			print '<a href="'+y.uri('newpass')+'">Try again?</a></p>'
-		elif self.result=='ok':
-			print '<h1>Password changed</h1>'
-			print '<p>I\'ve changed the password.'
-			print 'You probably want to go and look for'
-			print '<a href="'+y.uri('server')+'">some gossip</a>'
-			print 'to read now.</p>'
-		elif self.result=='showform':
-
-			print '<h1>Change your yarrow password</h1>'
-
-			if y.form.has_key('user') or \
-			   y.form.has_key('password') or \
-			   y.form.has_key('newpass1') or \
-			   y.form.has_key('newpass2'):
-				print '<p><b>Please fill in all the boxes!</b></p>'
-
-			# The box for the old password is called
-			# "password" so that browsers will fill it
-			# automatically.
-			# (note: this appears to log us in as well
-			# because it triggers handle_potential_logging_in(),
-			# which isn't exactly a problem, but isn't
-			# elegant. hpli() shouldn't work if we ARE
-			# logged in, which we have to be to get here.
-			# FIXME.)
-
-			print '<p>This lets you change your password '+\
-			      'on yarrow. If you don\'t have an '+\
-			      'account on yarrow yet, you probably want ' +\
-			      'to go and <a href="%s">create ' % (y.uri('newbie', None, 1)) +\
-			      'an account</a> instead.</p> <p>This is not where you change your '+\
-			      'shared-secret on any RGTP server. For that, contact the Editors '+\
-			      'of the relevant server.</p>' +\
-			      '<form action="'+y.uri('newpass','sys')+'" method="post"><table>' +\
-			      '<tr><td>Your email address:</td>' +\
-			      '<td><INPUT TYPE="text" NAME="user"></td></tr>' +\
-			      '<tr><td>Your old password</td>' +\
-			      '<td><INPUT TYPE="password" NAME="password">' +\
-			      '</td></tr>' +\
-			      '<tr><td>Your new password:</td>' +\
-			      '<td><INPUT TYPE="password" NAME="newpass1"></td></tr>' +\
-			      '<tr><td>Your new password again, to verify:</td>' +\
-			      '<td><INPUT TYPE="password" NAME="newpass2"></td></tr>' +\
-			      '<tr><td colspan="2" align="right">' +\
-			      '<input type="submit" value=" OK "></td></tr>' +\
-			      '</table></form>'
-		else:
-			raise rgtp.RGTPException('Weird status: '+self.result)
-
-################################################################
-
-class new_account_handler:
-	"Allows the user to create a new account."
-	
-	def head(self, y):
-		"""Performs any requested actions, and sets
-		self.result according to the outcome."""
-		
-		y.title = "Set up a new yarrow account"
-
-		if y.is_post_request() \
-		   and y.form.has_key('user') \
-		   and y.form.has_key('newpass1') \
-		   and y.form.has_key('newpass2'):
-			
-			if y.form['newpass1'].value!=y.form['newpass2'].value:
-				self.result = 'nomatch'
-			else:
-				try:
-					y.accept_user(user.create(y.form['user'].value.lower(),
-								y.form['newpass2'].value),
-						      1)
-
-					self.result='ok'
-
-				except user.AlreadyExistsException, aee:
-					self.result='clash'
-		else:
-			self.result = 'showform'
-
-	def body(self, y):
-		"""Prints the body text for this page. Because all the hard\
-work has already been done, this just prints text according to the value of\
-self.result."""
-
-		if self.result=='nomatch':
-			print '<h1>The passwords you gave didn\'t match</h1>' +\
-			      '<p>Silly person. ' +\
-			      '<a href="%s">Try again?</a></p>' % (y.uri('newbie', None, 1))
- 		elif self.result=='clash':
- 			print '<h1>Name clash</h1>' +\
-			      '<p>Sorry, but a user named %s ' % (y.form['user'].value) +\
-			      'already exists. <a href="%s">' % (y.uri('newbie','sys')) +\
-			      'Try again</a>?</p>'
-		elif self.result=='ok':
-			print '<h1>Welcome!</h1>' +\
-			      '<p>You now have a working Yarrow account. ' +\
-			      'Next, how about going to look for ' +\
-			      '<a href="%s">' % (y.uri(None, None)) +\
-			      'some gossip</a> to read?</p>'
-		elif self.result=='showform':
-
-			print '<h1>Set up a yarrow account</h1>'
-
-			if y.form.has_key('user') or \
-			   y.form.has_key('newpass1') or \
-			   y.form.has_key('newpass2'):
-				print '<p><b>Please fill in all the boxes!</b></p>'
-
-			print '<p>Welcome to Yarrow! To get started, please choose '+\
-			      'yourself a username and password.</p>' +\
-			      '<form action="'+y.uri('newbie','sys')+'" method="post"><table>' +\
-			      '<tr><td>Choose a username:</td>' +\
-			      '<td><INPUT TYPE="text" NAME="user"></td></tr>' +\
-			      '<tr><td>and a password:</td>' +\
-			      '<td><INPUT TYPE="password" NAME="newpass1"></td></tr>' +\
-			      '<tr><td>and the password again, to verify:</td>' +\
-			      '<td><INPUT TYPE="password" NAME="newpass2"></td></tr>' +\
-			      '<tr><td colspan="2" align="right">' +\
-			      '<input type="submit" value=" OK "></td></tr>' +\
-			      '</table></form>'
-		else:
-			raise rgtp.RGTPException('Weird status: '+self.result)
-
-
-################################################################
 
 ################################################################
 
@@ -1891,7 +1765,7 @@ class yarrow:
 		if add_cookies:
 			yarrow_session = 'yarrow-session'
 			self.outgoing_cookies[yarrow_session] = user.session_key()
-			self.outgoing_cookies[yarrow_session]['path'] = self.uri(None, '')
+			self.outgoing_cookies[yarrow_session]['path'] = self.uri(None, self.server)
 			if cookie_expiry:
 				self.outgoing_cookies[yarrow_session]['expires'] = cookie_expiry
 
@@ -1988,6 +1862,10 @@ class yarrow:
 
 	def print_headers(self, fly):
 		fly.set_cookies(self.outgoing_cookies)
+		if self.outgoing_cookies.has_key('yarrow-session') and self.outgoing_cookies['yarrow-session']['expires']<0:
+			# also remove the old-fashioned cookie
+			self.outgoing_cookies['yarrow-session']['path']=self.uri(None,'')
+			fly.set_cookies(self.outgoing_cookies)
 
 		print """
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
@@ -1999,9 +1877,9 @@ body {
   font-family: Verdana, Arial, Helvetica, sans-serif; height: 8.5in;
   background-color: #FFFFFF; color: #000000; }
 td { vertical-align: top; font-size: 10px; }
-th { background-color: #770000; text-align: left; color: #FFFFFF;
+th { background-color: #FF7F00; text-align: left; color: #FFFFFF;
   vertical-align: middle; font-size: 12px; }
-.reply, .reply a { background-color: #770000; color: #FFFFFF; }
+.reply, .reply a { background-color: #FF7F00; color: #FFFFFF; }
 .reply td { text-align: right; }
 .menu {
   position: absolute; left:auto; bottom:auto; top: 0; right: 0;
@@ -2009,15 +1887,15 @@ th { background-color: #770000; text-align: left; color: #FFFFFF;
   font-size:10px; padding-left: 1em; float: right; }
 .menu { position: fixed; } /* Float it, if you can. */
 .menu a,
- .menu a:visited { color: #770000; background-color: #FFFFFF; text-decoration: none; }
+ .menu a:visited { color: #FF7F00; background-color: #FFFFFF; text-decoration: none; }
 .menu h1 { font-size:10px; color: #000000; background-color: #FFFFFF; }
 .content { position: absolute; width: 86%; height: auto;
   top: 0; left: 0; right: 90%; padding-left: 1em; background-color: #FFFFFF;
   color: #000000; text-align: left; z-index: 0; }
-table.browse a, table.browse a:visited { text-decoration: none; color: #770000; }
+table.browse a, table.browse a:visited { text-decoration: none; color: #FF7F00; }
 table.browse a.related, table.browse a.related:visited {
-   background-color: #770000; color: #FFFFFF; }
-a { color: #770000; text-decoration: underline; }
+   background-color: #FF7F00; color: #FFFFFF; }
+a { color: #FF7F00; text-decoration: underline; }
 a:visited { color: #000000; text-decoration: underline; }
 a.uid { font-family: monospace; color: #FFFFFF; text-decoration: none; }
 a.seq { font-style: italic; color: #FFFFFF; text-decoration: none; }
@@ -2067,26 +1945,10 @@ ul.others { list-style-type: square; font-style: italic; }
 				serverlink(self,'motd','status', 's')
 				serverlink(self,'editlog', 'show&nbsp;edits', 'e');
 
-		print '<h1>general</h1>'
-		if self.is_real_user():
-			print '<a href="%s">log&nbsp;out</a><br>' % (
-				self.uri('logout', 'sys'))
-			print '<a href="%s">password</a><br>' % (
-				self.uri('newpass', 'sys'))
-
-			print '<br>'
-
-			servers = self.user.metadata.keys()
-			servers.sort()
-			for server in servers:
-				print '<a href="%s">&gt;&nbsp;%s</a><br>' % (
-					self.uri('browse', server),
-					server)
-		else:
-			print '<a href="%s">log&nbsp;in</a><br>' % (
-				self.uri('login', 'sys', 1))
-			print '<a href="%s">sign&nbsp;up</a><br>' % (
-				self.uri('newbie', 'sys', 1))
+				if self.is_real_user():
+					serverlink(self, 'logout', 'log&nbsp;out', 'o')
+				else:
+					serverlink(self, 'login', 'log&nbsp;in', 'i')
 
 		print """<h1>yarrow</h1>
 <a href="http://rgtp.thurman.org.uk/yarrow/">about</a><br>
@@ -2190,7 +2052,7 @@ ul.others { list-style-type: square; font-style: italic; }
 		"Destroys our session cookie, for when you log out."
 		yarrow_session = 'yarrow-session'
 		self.outgoing_cookies[yarrow_session] = ""
-		self.outgoing_cookies[yarrow_session]["path"] = self.uri('', '')
+		self.outgoing_cookies[yarrow_session]["path"] = self.uri(None, self.server)
 		self.outgoing_cookies[yarrow_session]["expires"] = -500000
 
 	def is_post_request(self):
@@ -2207,54 +2069,6 @@ ul.others { list-style-type: square; font-style: italic; }
 				return self.form[key].value
 			else:
 				return ''
-
-		def handle_potential_logging_in(y):
-			"""Many pages give the user the chance to log in
-			(by calling login_form()) if the user isn't currently
-			logged in; such login forms submit to the current
-			page, so that on success we can go back there. Such
-			pages need to call this function from their 'head()'
-			to handle it if the user is logging in. Returns
-			'accepted' if the user was logged in successfully,
-			'failed' if they weren't,
-			and 'not' if the user wasn't attempting to log in."""
-
-			# FIXME: When the dust of adding "visitors" has
-			# settled, find whether this is really as common
-			# as it used to be.
-
-			visiting = y.form.has_key('visiting') and y.is_post_request()
-
-			username = password = None
-
-			if visiting:
-				username = 'Visitor'
-			elif y.form.has_key('user'):
-				# hmm, confusing name
-				username = y.form['user'].value.lower()
-
-			if y.form.has_key('password'):
-				password = y.form['password'].value
-
-			if visiting or password:
-				# OK, so they're logging in.
-				possible = user.from_name(username)
-
-				if possible and (visiting or possible.password_matches(password)):
-					if (not visiting) and y.form.has_key('remember') and y.form['remember'].value:
-						# Ten years or so
-						expiry = 60*60*24*365*10
-					else:
-						# As soon as you
-						# close the browser
-						expiry = 0
-
-					y.accept_user(possible, 1, expiry)
-					return 'accepted'
-				else:
-					return 'failed'
-			else:
-				return 'not'
 
       		# Some things we can just pick up from arguments.
 
@@ -2345,12 +2159,6 @@ ul.others { list-style-type: square; font-style: italic; }
 				# they're coming in on the main page).
 				self.verb = 'server'
 
-		# Many pages can print the login form, and that form submits
-		# back to the same page (so that if it works, you can go
-		# straight to what you were asking for). It makes sense to
-		# handle the logging in globally.
-		self.logging_in_status = handle_potential_logging_in(self)
-
 	tasks = {
 		'read': read_handler,
 		'thread': thread_handler,
@@ -2363,13 +2171,11 @@ ul.others { list-style-type: square; font-style: italic; }
 		'config': config_handler,
 		'newbie': regu_handler,
 		'catchup': catchup_handler,
+		'login': login_handler,
+		'logout': logout_handler,	
 	}
 
 	sys_tasks = {
-		'login': login_handler,
-		'logout': logout_handler,	
-		'newpass': change_password_handler,
-		'newbie': new_account_handler,
 		'server': server_chooser_handler,
 	}
 

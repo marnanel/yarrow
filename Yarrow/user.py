@@ -25,15 +25,6 @@ import config
 users_file = config.backing_store_path('users')
 sessions_file = config.backing_store_path('sessions')
 
-class AlreadyExistsException(Exception):
-	"Thrown when you attempt to create a user that already exists."
-	pass
-
-def hash_of(password):
-	temp = md5.new()
-	temp.update(password)
-	return temp.hexdigest()
-
 class user:
 	"Represents one user of the system."
 	def __init__(self, username):
@@ -41,6 +32,10 @@ class user:
 		self.metadata = {}
 		self.last_sequences = {}
 		self.version = 1
+		# We no longer use the password field, so set it to '*'
+		# so that new accounts won't be usable by older copies
+		# of Yarrow.
+		self.password = '*'
 
 	def __str__(self):
 		return self.username
@@ -76,10 +71,6 @@ class user:
 		mutex.drop()
 		return key
 
-	def password_matches(self, another):
-		"Returns true if the password that's set matches |password|."
-		return hash_of(another) == self.password
-
 	def save(self, must_not_exist=0):
 		mutex = common.mutex('users.lock')
 		mutex.get()
@@ -92,9 +83,6 @@ class user:
 		store[self.username] = self
 		store.close()
 		mutex.drop()
-
-	def set_password(self, new_password):
-		self.password = hash_of(new_password)
 
 class visitor(user):
 	"Represents a casual user of the system whose name we don't know."
@@ -110,15 +98,9 @@ class visitor(user):
 	def state(self, server, field, default):
 		return default
 
-	def password_matches(self, another):
-		return 0 # nah!
-
 	def save(self, must_not_exist=0):
 		# no, go away
 		pass
-
-	def set_password(self, new_password):
-		pass # quite literally!
 
 	def invent_new_password(self):
 		pass
@@ -133,6 +115,27 @@ def from_name(username):
 		users.close()
 		return result
 
+def from_userid_and_secret(userid, secret, server):
+	"""Returns a user with the given userid and secret on the given server.
+	If none exists, returns None."""
+	if userid=='Visitor':
+		return visitor()
+
+	# This is enormously inefficient.
+	# It's written this way to keep the existing structure.
+	# We need to rethink the way we store user information.
+	# At least it only happens when users log in.
+
+	result = None
+	users = shelve.open(users_file)
+	for k in users.keys():
+		u = users[k]
+		if u.metadata.has_key(server) and u.metadata[server]['secret'].lower()==secret.lower():
+			result = u
+			break
+	users.close()
+	return result
+
 def from_session_key(key):
 	sessions = shelve.open(sessions_file)
 	username = sessions.get(key)
@@ -144,12 +147,10 @@ def from_session_key(key):
 		return None
 
 def create(username, password):
-	"""Creates a new user with username |username| and password |password|.
-It must not already exist. Writes it out to persistant storage and
-returns the newly-created user."""
+	"""Creates a new user with a random username and no password, and
+writes it out to backing storage."""
 
-	result = user(username)
-	result.set_password(password)
+	result = user(common.random_hex_string())
 	result.save(1)
 
 	return result
