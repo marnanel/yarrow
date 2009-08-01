@@ -1491,7 +1491,7 @@ class logout_handler:
 
 ################################################################
 
-class server_chooser_handler:
+class serverlist_handler:
 	def head(self, y):
 		y.title = 'Choose an RGTP server'
 
@@ -1520,44 +1520,7 @@ class server_chooser_handler:
 
 ################################################################
 
-class server_frontend_handler:
-	def __init__(self, list):
-		self.verbs = list
-
-	def head(self, y):
-		if not y.server:
-			# Probably we're redirecting...
-			return
-
-		y.title = '%s - %s' % (y.server,
-				       y.server_details.get('description'))
-
-	def body(self, y):
-		if not y.server:
-			# Probably we're redirecting...
-			return
-
-		print '<h1>%s</h1>' % (y.server)
-
-		if y.server_details.has_key('longdesc'):
-			print y.server_details['longdesc']
-
-		print '<p>%s lives on the host <code>%s</code>, port <code>%s</code>.</p>' % (
-			y.server.title(),
-			y.server_details['host'],
-			y.server_details['port'])
-
-		print '<ul>'
-		print '<li><a href="%s"><b>Read %s now!</b></a></li>' % (
-			y.uri('browse'),
-			y.server.title())
-		print '<li><a href=".">Look for some other servers.</a></li>'
-		print '</ul>'
-			
-
-################################################################
-
-class regu_handler:
+class newbie_handler:
 	"Lets you create an account on an RGTP server."
 	def head(self, y):
 		y.title = 'Request a %s account' % (y.server)
@@ -1636,7 +1599,7 @@ class regu_handler:
 
 ################################################################
 
-class udbm_handler:
+class users_handler:
 	def head(self, y):
 		y.title = 'Modify user settings on '+y.server
 
@@ -2133,30 +2096,29 @@ ul.others { list-style-type: square; font-style: italic; }
 			self.readmyown = 0 # but you can't post anyway
 			self.accesskeys = 3
 
-		if self.item!='' and self.verb=='':
-			self.verb = 'read' # implicit for items
-
-		if self.server=='' and self.verb=='':
-			# The default verb is different if they
-			# haven't specified a server too (because then
-			# they're coming in on the main page).
-			self.verb = 'serverlist'
+		if self.verb=='':
+			if self.server=='':
+				self.verb = 'serverlist'
+			elif self.item!='':
+				self.verb = 'read' # implicit for items
+			else:
+				self.verb = 'browse'
 
 	tasks = {
 		'read': read_handler,
 		'thread': thread_handler,
 		'motd': motd_handler,
 		'browse': browse_handler,
-		'users': udbm_handler,
+		'users': users_handler,
 		'wombat': wombat_handler,
 		'post': post_handler,
 		'editlog': editlog_handler,
 		'config': config_handler,
-		'newbie': regu_handler,
+		'newbie': newbie_handler,
 		'catchup': catchup_handler,
 		'login': login_handler,
 		'logout': logout_handler,	
-		'serverlist': server_chooser_handler,
+		'serverlist': serverlist_handler,
 	}
 
 	def begin_tasks(self):
@@ -2167,11 +2129,7 @@ before the HTML starts printing."""
 
 		tasklist = self.tasks
 
-		if self.verb=='':
-			# They didn't say what they wanted to do,
-			# so give them a general overview.
-			self.verb_handler = server_frontend_handler(tasklist)
-		elif tasklist.has_key(self.verb):
+		if tasklist.has_key(self.verb):
 			# Ah, we know about what they wanted to do.
 			# Create them a handler to do it for them.
 			self.verb_handler = tasklist[self.verb]()
