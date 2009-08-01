@@ -1529,11 +1529,8 @@ class server_frontend_handler:
 			# Probably we're redirecting...
 			return
 
-		if y.server=='sys':
-			y.title = 'Just a placeholder'
-		else:
-			y.title = '%s - %s' % (y.server,
-					       y.server_details.get('description'))
+		y.title = '%s - %s' % (y.server,
+				       y.server_details.get('description'))
 
 	def body(self, y):
 		if not y.server:
@@ -1541,13 +1538,6 @@ class server_frontend_handler:
 			return
 
 		print '<h1>%s</h1>' % (y.server)
-
-		if y.server=='sys':
-			# not a real server! Bail.
-			print "<p>This isn't a real server; it's just used as"
-			print "a placeholder. Best place to go would be"
-			print '<a href=".">back to the main page</a>.'
-			return
 
 		if y.server_details.has_key('longdesc'):
 			print y.server_details['longdesc']
@@ -1823,7 +1813,7 @@ class yarrow:
 		def meta_field(y, field):
 			return y.user.state(y.server, field, None)
 
-		if self.server!='' and self.server!='sys':
+		if self.server!='':
 			try:
 				server = config.server_details(self.server)
 			except Exception, e:
@@ -1908,7 +1898,7 @@ ul.others { list-style-type: square; font-style: italic; }
 		self.maybe_print_logs()
 
 		print '</div><div class="menu">'
-		if self.server!='' and self.server!='sys':
+		if self.server!='':
 						
 			print '<h1>%s</h1>' % (self.server)
 			def serverlink(y, name, title, keypress):
@@ -2146,13 +2136,11 @@ ul.others { list-style-type: square; font-style: italic; }
 		if self.item!='' and self.verb=='':
 			self.verb = 'read' # implicit for items
 
-		if self.server=='':
-			self.server='sys'
-			if self.verb=='':
-				# The default verb is different if they
-				# haven't specified a server too (because then
-				# they're coming in on the main page).
-				self.verb = 'server'
+		if self.server=='' and self.verb=='':
+			# The default verb is different if they
+			# haven't specified a server too (because then
+			# they're coming in on the main page).
+			self.verb = 'server'
 
 	tasks = {
 		'read': read_handler,
@@ -2168,9 +2156,6 @@ ul.others { list-style-type: square; font-style: italic; }
 		'catchup': catchup_handler,
 		'login': login_handler,
 		'logout': logout_handler,	
-	}
-
-	sys_tasks = {
 		'server': server_chooser_handler,
 	}
 
@@ -2180,12 +2165,7 @@ before the HTML starts printing."""
 
 		# Okay, find all the things they could ask for.
 
-		if self.server=='sys':
-			# "sys" is magic, not a real server;
-			# get the list for "sys".
-			tasklist = self.sys_tasks
-		else:
-			tasklist = self.tasks
+		tasklist = self.tasks
 
 		if self.verb=='':
 			# They didn't say what they wanted to do,
