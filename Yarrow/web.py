@@ -336,7 +336,7 @@ class read_handler:
 				'whole thread</a> in a printer-friendly format.</li>'
 
 		print '<li>Return to <a href="%s">the %s index</a>.</li>' % (
-			y.uri('browse'),
+			y.uri(),
 			y.server.title())
 
 		print '</ul>'
@@ -520,7 +520,7 @@ doesn't permit anonymous browsing.</p>
 <p>Anonymous browsing has been disabled for the moment. Please contact the Editors for access.</p>
 
 <p>You'll need cookies enabled to continue from here.</p>
-""" % (y.server)#, y.uri('browse'))
+""" % (y.server)#, y.uri())
 			result = 1
 		#<p>Would you like to try connecting as a guest for now? This may
 		#let you read gossip, but won't let you post.</p>
@@ -778,11 +778,11 @@ class browse_handler:
 
 		if sliceStart+sliceSize < len(index):
 			print '<a href="%s?skip=%d">&lt;&lt; Earliest</a> |' % (
-				y.uri('browse'),
+				y.uri(),
 				len(index)-sliceSize)
 			
 			print '<a href="%s?skip=%d">&lt; Previous</a> |' % (
-				y.uri('browse'),
+				y.uri(),
 				sliceStart+sliceSize)
 		
 		print 'Items %d-%d of %d' % (sliceStart+1,
@@ -790,21 +790,21 @@ class browse_handler:
 					      len(index))
 
 		if y.form.has_key('unsliced'):
-			 print '| <a href="%s">Most recent</a>' % (y.uri('browse'))
+			 print '| <a href="%s">Most recent</a>' % (y.uri())
 		else:
-			 print '| <a href="%s?unsliced=1">All</a>' % (y.uri('browse'))
+			 print '| <a href="%s?unsliced=1">All</a>' % (y.uri())
 
 		if sliceStart - sliceSize >= 0:
 			if sliceStart==sliceSize:
 				print '| <a href="%s">Next &gt;</a>' % (
-					y.uri('browse'))
+					y.uri())
 			else:
 				print '| <a href="%s?skip=%d">Next &gt;</a>' % (
-					y.uri('browse'),
+					y.uri(),
 					sliceStart-sliceSize)
 	
 			print '| <a href="%s">Newest &gt;&gt;</a>' % (
-				y.uri('browse'))
+				y.uri())
 		
 		print '</td></tr>' +\
 		      '<tr><td colspan="%d" align="center">' % (colcount) +\
@@ -844,7 +844,7 @@ class post_handler:
 
 			print '<p>You might want to '+\
 			      '<a href="%s">return ' % (
-				y.uri('browse'),
+				y.uri(),
 				) +\
 			      'to the index</a>.</p>'
 
@@ -999,7 +999,7 @@ the item itself, to explain.</p>
 				print '</td>'
 			else:
 				print '<td><a href="%s">' % (
-					y.uri('browse'))
+					y.uri())
 				print '<i>index</i></a></td>'
 			print '<td>'+thing['date']+'</td>'
 			print '<td>'+thing['action']+'</td>'
@@ -1302,7 +1302,7 @@ nargery</a>, you probably don't want this turned on.</p>
 
 		print """
 <p>You probably want to go and <a href="%s">read
-some gossip</a> now.</p>""" % (y.uri('browse'))
+some gossip</a> now.</p>""" % (y.uri())
 
 ################################################################
 
@@ -1660,7 +1660,7 @@ class catchup_handler:
 			      '<p>Or you could just'
 
 		print 'go back to <a href="%s">the %s index</a>.</p>' % (
-			y.uri('browse'), y.server)
+			y.uri(), y.server)
 
 ################################################################
 
@@ -1880,7 +1880,7 @@ ul.others { list-style-type: square; font-style: italic; }
 					title)
 
 			if self.connection:
-				serverlink(self,'browse','browse', 'b')
+				serverlink(self,None,'browse', 'b')
 				serverlink(self,'post','post', 'p')
 				serverlink(self,'catchup','catch&nbsp;up', 'u')
 				print '<br>'
