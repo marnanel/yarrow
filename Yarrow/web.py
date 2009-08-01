@@ -2104,6 +2104,8 @@ ul.others { list-style-type: square; font-style: italic; }
 			else:
 				self.verb = 'browse'
 
+	# FIXME No need for this despatch table; read them out of the
+	# object's own dictionary.
 	tasks = {
 		'read': read_handler,
 		'thread': thread_handler,
