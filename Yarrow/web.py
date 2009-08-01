@@ -824,6 +824,21 @@ and (for the sake of rhyming verse)<br>it turned into a wombat.</p>"""
 
 ################################################################
 
+class random_handler:
+	def head(self, y):
+		itemids = cache.index(y.server, y.connection).items().keys()
+		if itemids:
+			target = random.choice(itemids)
+			y.fly.set_header('Status', '301 Random')
+			y.fly.set_header('Location', y.uri(target))
+			y.fly.send_only_headers()
+
+	def body(self, y):
+		# if you got here...
+		print "There are no items, so you cannot go to one."
+
+################################################################
+
 class post_handler:
 	"Handles both creating new items and replying to existing ones."
 
@@ -1883,9 +1898,9 @@ ul.others { list-style-type: square; font-style: italic; }
 				serverlink(self,None,'browse', 'b')
 				serverlink(self,'post','post', 'p')
 				serverlink(self,'catchup','catch&nbsp;up', 'u')
+				serverlink(self,'random','random', 'd')
 				print '<br>'
 				serverlink(self,'config','config', 'c')
-				serverlink(self,'newbie','register', 'r')
 
 				if self.connection.access_level > 2:
 					serverlink(self,'users','accounts', 'a')
@@ -1897,6 +1912,7 @@ ul.others { list-style-type: square; font-style: italic; }
 					serverlink(self, 'logout', 'log&nbsp;out', 'o')
 				else:
 					serverlink(self, 'login', 'log&nbsp;in', 'i')
+					serverlink(self,'newbie','register', 'r')
 
 		print """<h1>yarrow</h1>
 <a href="http://rgtp.thurman.org.uk/yarrow/">about</a><br>
@@ -2120,6 +2136,7 @@ ul.others { list-style-type: square; font-style: italic; }
 		'catchup': catchup_handler,
 		'login': login_handler,
 		'logout': logout_handler,	
+		'random': random_handler,
 		'serverlist': serverlist_handler,
 	}
 
