@@ -539,7 +539,7 @@ doesn't permit anonymous browsing.</p>
 		'<a href="%s">set up a ' % (y.uri('newbie', None, 1)) +\
 		'%s account</a>. ' % (y.server.title()) +\
 		'After that, simply '+\
-		'<a href="%s">log ' % (y.uri('login','sys', 1)) +\
+		'<a href="%s">log ' % (y.uri('login', None, 1)) +\
 		'in to Yarrow</a> to save settings. Even if '+\
 		'you don\'t want to post, it\'s worth logging in '+\
 		'to Yarrow, because it can highlight any unread '+\
@@ -838,7 +838,7 @@ class post_handler:
 			if not y.is_real_user():
 				print '<p>Maybe you should try '+\
 				'<a href="%s">logging ' % (
-					y.uri('login', 'sys', 1),
+					y.uri('login', None, 1),
 					) +\
 				'in</a>.</p>'
 
@@ -1019,7 +1019,7 @@ class config_handler:
 			print '<p>Sorry, you can\'t set the options for'
 			print 'individual servers unless you'
 			print '<a href="%s">log in to' % (
-				y.uri('login', 'sys', 1))
+				y.uri('login', None, 1))
 			print 'yarrow</a>.</p>'
 			return
 
