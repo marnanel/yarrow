@@ -209,10 +209,7 @@ class base:
 		self.incoming = sock.makefile("r")
 		self.outgoing = sock.makefile("w")
 		self.encoding = encoding
-		if encoding=='utf-8':
-			self.cback = cback
-		else:
-			self.cback = lambda x: cback(x.decode(self.encoding).encode('utf-8'))
+		self.cback = cback
 		self.get_line()
 
 	def get_line(self):
@@ -239,6 +236,7 @@ class base:
 
 	def receive(self):
 		temp = string.rstrip(self.incoming.readline())
+		temp = temp.decode(self.encoding).encode('utf-8')
 		if self.logging: self.log = self.log + "\n<" +temp
 		return temp
 
@@ -252,10 +250,7 @@ class base:
 	def send(self, message, cback):
 		"Sends one line to the server, and waits for a response."
 		self.cback = cback
-		if self.encoding=='utf-8':
-			self.raw_send(message)
-		else:
-			self.raw_send(message.decode('utf-8').encode(self.encoding))
+		self.raw_send(message.decode('utf-8').encode(self.encoding))
 		self.get_line()
 
 ###########################################################
