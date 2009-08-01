@@ -1368,12 +1368,7 @@ class rgtp_failure_handler:
 
 class login_handler:
 	def handle_potential_logging_in(self, y):
-		"""Many pages give the user the chance to log in
-		(by calling login_form()) if the user isn't currently
-		logged in; such login forms submit to the current
-		page, so that on success we can go back there. Such
-		pages need to call this function from their 'head()'
-		to handle it if the user is logging in. Returns
+		"""Returns
 		'accepted' if the user was logged in successfully,
 		'failed' if they weren't,
 		and 'not' if the user wasn't attempting to log in."""
