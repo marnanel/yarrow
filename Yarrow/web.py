@@ -2140,7 +2140,7 @@ ul.others { list-style-type: square; font-style: italic; }
 			# The default verb is different if they
 			# haven't specified a server too (because then
 			# they're coming in on the main page).
-			self.verb = 'server'
+			self.verb = 'serverlist'
 
 	tasks = {
 		'read': read_handler,
@@ -2156,7 +2156,7 @@ ul.others { list-style-type: square; font-style: italic; }
 		'catchup': catchup_handler,
 		'login': login_handler,
 		'logout': logout_handler,	
-		'server': server_chooser_handler,
+		'serverlist': server_chooser_handler,
 	}
 
 	def begin_tasks(self):
