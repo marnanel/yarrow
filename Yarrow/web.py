@@ -322,6 +322,9 @@ ul.others { list-style-type: square; font-style: italic; }
 		"""Shows a list of all the currently unread items. A bit like
 		readnew used to be, on Phoenix."""
 
+		if not self.is_real_user():
+			return
+
 		if self.user and not self.user.last_sequences.has_key(self.server):
 			self.user.last_sequences[self.server] = {} # Stop errors below...
 
@@ -333,65 +336,62 @@ ul.others { list-style-type: square; font-style: italic; }
 			else:
 				return ''
 
-		if self.is_real_user():
+		print '<hr>'
 
-			print '<hr>'
+		collater = cache.index(self.server, self.connection)
 
-			collater = cache.index(self.server, self.connection)
+		candidates = []
+		for k in collater.keys():
+			if self.user.last_sequences[self.server].get(k) < collater.sequences().get(k):
+				candidates.append(k)
 
-			candidates = []
-			for k in collater.keys():
-				if self.user.last_sequences[self.server].get(k) < collater.sequences().get(k):
-					candidates.append(k)
+		class has_no_parent_in:
+			# wouldn't be necessary if lambda could
+			# see local scope in Python. bah.
+			def __init__(self, candidates, items):
+				self.items = items
+				self.candidates = candidates
+			def __call__(self, x):
+				return not self.items[x].has_key('child') or not self.items[x]['child'] in self.candidates
 
-			class has_no_parent_in:
-				# wouldn't be necessary if lambda could
-				# see local scope in Python. bah.
-				def __init__(self, candidates, items):
-					self.items = items
-					self.candidates = candidates
-				def __call__(self, x):
-					return not self.items[x].has_key('child') or not self.items[x]['child'] in self.candidates
+		candidates = filter(
+			has_no_parent_in(candidates, collater.items()),
+			candidates)
 
-			candidates = filter(
-				has_no_parent_in(candidates, collater.items()),
-				candidates)
+		if (self.accesskeys & 2):
+			print '<ol>'
+		else:
+			print '<ul>'
 
-			if (self.accesskeys & 2):
-				print '<ol>'
-			else:
-				print '<ul>'
+		for k in candidates[0:9]:
+			seq = self.user.last_sequences[self.server].get(k)
+			fragment = ''
+			details = 'unread'
 
-			for k in candidates[0:9]:
-				seq = self.user.last_sequences[self.server].get(k)
-				fragment = ''
-				details = 'unread'
+			if seq:
+				fragment = '#after-%x' % (seq)
+				details = 'updated'
 
-				if seq:
-					fragment = '#after-%x' % (seq)
-					details = 'updated'
+			print '<li><b><a href="' +\
+			    self.uri(k + fragment) + '"' + \
+			    accesselement(self, count) + '>' +\
+			    cgi.escape(collater.items()[k]['subject']) +\
+			    '</a></b> ' +\
+			    '(' + details + ')' +\
+			    '</li>'
 
-				print '<li><b><a href="' +\
-				      self.uri(k + fragment) + '"' + \
-				      accesselement(self, count) + '>' +\
-				      cgi.escape(collater.items()[k]['subject']) +\
-				      '</a></b> ' +\
-				      '(' + details + ')' +\
-				      '</li>'
+			count += 1
 
-				count += 1
+		if (self.accesskeys & 2):
+			print '</ol>'
+		else:
+			print '</ul>'
 
-			if (self.accesskeys & 2):
-				print '</ol>'
-			else:
-				print '</ul>'
-
-			if len(candidates)>9:
-				# "threads", not "items", because we hide
-				# unread continuations.
-				print '<p>(and others: there are %d unread threads)</p>' % (
-					len(candidates))
-
+		if len(candidates)>9:
+			# "threads", not "items", because we hide
+			# unread continuations.
+			print '<p>(and others: there are %d unread threads)</p>' % (
+				len(candidates))
 
 	def maybe_print_logs(self):
 		if not self.connection or not self.connection.base.logging:
