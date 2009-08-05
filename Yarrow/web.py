@@ -289,7 +289,9 @@ ul.others { list-style-type: square; font-style: italic; }
 
 			if self.connection:
 				def usable(have, need):
-					if need==-1:
+					if need==-2:
+						return True
+					elif need==-1:
 						return have==0
 					else:
 						return have>=need
@@ -299,7 +301,6 @@ ul.others { list-style-type: square; font-style: italic; }
 					     for x in dir(tasks)
 					     if x.endswith('_handler')]
 					    if usable(self.connection.access_level, y.privilege())]
-
 
 				tasklist.sort(key=lambda y: y.sortkey())
 				for task in tasklist:

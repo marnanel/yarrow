@@ -290,12 +290,9 @@ doesn't permit anonymous browsing.</p>""" % (y.server)
         1 = usable by people with read access
         0 = usable at all times, even when logged out
         -1 = usable only when logged out
-
-	XXX FIXME
-	There is no privilege level for "usable by all users, but needs login".
-	Fix this.  (Use -2?)  These should not be accessible, but should
-	still be listed in the sidebar, to give people an idea of what might
-	be possible if they log in.
+	-2 = usable by all users, but needs login; always shown
+	in sidebar, though, even if logged out (so they know what
+	would be possible if they logged in).
 
 	XXX FIXME
 	Change this:
@@ -1414,6 +1411,9 @@ nargery</a>, you probably don't want this turned on.</p>
 		print """
 <p>You probably want to go and <a href="%s">read
 some gossip</a> now.</p>""" % (y.uri())
+
+	def privilege(self):
+		return -2
 
 ################################################################
 
