@@ -204,70 +204,6 @@ class handler_ancestor:
 		'<p>You will need cookies ' +\
 		'enabled from here on in.</p>'
 
-    def you_should_be_logged_in(self, y):
-	"""Prints appropriate warnings if y requires you to be logged in
-	and you're not. Returns whether we recommend they should be
-	prevented from continuing.  This is called from the body()
-	methods of various task classes; it should possibly be
-	replaced by a general check of the privilege() method."""
-
-	result = 0
-
-	if y.user:
-		# They're logged into yarrow.
-
-		who_they_are = y.user.state(y.server, 'userid', '')
-
-		if not who_they_are:
-			# ... but we have no details for them on this
-			# server.
-
-			if y.connection.access_level==0:
-				print """<p>Sorry, this server doesn't
-permit guest users. You'll have to <a href="%s">apply for
-an account</a> if you want to use it.</p>""" % (
-	y.uri('newbie', None, 1))
-
-			if y.user.username!='Visitor':
-				print """
-<p><b>Already have a %s ID?</b>
-<a href="%s">Set it up</a> in order to post.<br>
-<b>Don't have a %s ID?</b>
-<a href="%s">Apply for one!</a></p>""" % (
-			    y.server,
-			    y.uri('config'),
-			    y.server,
-			    y.uri('newbie', None, 1),
-			    )
-
-			if y.connection.access_level==0:
-				# Can't go any further, then.
-				result = 1
-	else:
-		# They're not logged in to yarrow.
-		# Can we give them satisfaction anyway?
-		if y.connection.access_level==0:
-			# No. But at least we can point them
-			# in the right direction.
-			print """
-<p>You're trying to view a page from %s, which
-doesn't permit anonymous browsing.</p>""" % (y.server)
-			self.print_login_form(y)
-			result = 1
-
-		# Otherwise they have guest access anyway,
-		# which is just about as good.
-
-	if not y.is_real_user() and y.connection.access_level==1:
-	        print '<p>To post or reply, you\'ll need to '+\
-		'<a href="%s">log ' % (y.uri('login', None, 1)) +\
-		'in</a>. Even if '+\
-		'you don\'t want to post, it\'s worth logging in, '+\
-		'because then Yarrow can highlight any unread '+\
-		'gossip for you.</p>'
-
-	return result
-
     def title(self):
         """Returns the name displayed in the sidebar for this task.
 	Returns None if the task should not be displayed in the
@@ -293,15 +229,92 @@ doesn't permit anonymous browsing.</p>""" % (y.server)
 	-2 = usable by all users, but needs login; always shown
 	in sidebar, though, even if logged out (so they know what
 	would be possible if they logged in).
-
-	XXX FIXME
-	Change this:
-	This does not stop the task being called; it's only used
-	to decide what to display in the sidebar.  For the actual
-	access control, see the you_should_be_logged_in() method,
-	amongst others."""
+	"""
 	# the default is by far the most common case
         return 1
+
+    def allowed(self, y):
+	    """Figures out whether the current user is allowed to
+	    use this task.  Returns this same object if things are
+	    good, or a replacement one which will explain what the
+	    problem was."""
+	    
+	    want = self.privilege()
+	    logged_in = y.user!=None
+
+	    if want < 0:
+
+		    if want==-1 and logged_in:
+			    return only_when_logged_out()
+		    elif want==-2 and not logged_in:
+			    return only_when_logged_in()
+	    else:
+		    have = 0
+		    if y.connection: have = y.connection.access_level
+
+		    if have < want:
+			    if not logged_in:
+				    # special case: let them log in
+				    return only_when_logged_in()
+			    else:
+				    return need_higher_privilege(want, have)
+		    elif not logged_in:
+			    print '<p>To post or reply, you\'ll need to '+\
+				'<a href="%s">log ' % (y.uri('login', None, 1)) +\
+				'in</a>. Even if '+\
+				'you don\'t want to post, it\'s worth logging in, '+\
+				'because then Yarrow can highlight any unread '+\
+				'gossip for you.</p>'
+
+	    return self
+
+################################################################
+
+class privilege_error(handler_ancestor):
+	def head(self, y):
+		y.title = 'Permissions error'
+
+	def allowed(self, y):
+		"should never be called, but for the sake of clarity"
+		return True
+
+class only_when_logged_in(privilege_error):
+	def body(self, y):
+		if y.connection.access_level==0:
+			print '<h1>%s doesn\'t permit anonymous browsing</h1>' % (y.server)
+			print "<p>You're trying to view a page from %s, which" % (y.server)
+			print "doesn't permit anonymous browsing.</p>"
+		else:
+			print '<h1>Only when logged in</h1>'
+			print "<p>That command only works when you're logged in."
+			print "You're currently logged out; would"
+			print "you like to log in?</p>"
+
+		self.print_login_form(y)
+
+class only_when_logged_out(privilege_error):
+	def body(self, y):
+		print '<h1>Only when logged out</h1>'
+		print "<p>That command only works when you're logged out."
+		print "You're currently logged in; <a href=\"%s\">would" % (y.uri('logout'))
+		print "you like to log out</a>?  You might prefer to go and"
+		print "<a href=\"%s\">read some gossip</a> instead.</p>" % (y.uri())
+
+class need_higher_privilege(privilege_error):
+	def __init__(self, want, have):
+		self.want = want
+		self.have = have
+
+	def body(self, y):
+		access = ['no', 'read-only', 'posting', 'Editor']
+		print '<h1>That command is not available to you</h1>'
+		print '<p>That command is only available to people'
+		print 'with %s access; you have %s access.</p>' % (
+			access[self.want],
+			access[self.have])
+		print '<p>If you think you should be able to use this'
+		print 'command, please <a href="%s">contact' % (y.uri('motd'))
+		print 'the Editors</a>.</p>'
 
 ################################################################
 
@@ -354,9 +367,6 @@ class read_handler(handler_ancestor):
 	def body(self, y):
 
 		print '<h1>%s</h1>' % (linkify(y, y.title))
-
-		if self.you_should_be_logged_in(y):
-			return
 
 		if y.user and not y.user.last_sequences.has_key(y.server):
 			y.user.last_sequences[y.server] = {} # Stop errors below...
@@ -510,9 +520,6 @@ class thread_handler(read_handler):
 
 	def body(self, y):
 
-		if self.you_should_be_logged_in(y):
-			return
-
 		if y.user and not y.user.last_sequences.has_key(y.server):
 			y.user.last_sequences[y.server] = {} # Stop errors below...
 
@@ -632,9 +639,6 @@ class browse_handler(handler_ancestor):
 					y.user.save()
 					return 1
 		
-		if self.you_should_be_logged_in(y):
-			return
-
 		if not y.collater:
 			print '<p>%s</p><p>(Try' % (
 				y.title)
@@ -1046,9 +1050,6 @@ class editlog_handler(handler_ancestor):
 		y.title = y.server + ' edit log'
 
 	def body(self, y):
-		if self.you_should_be_logged_in(y):
-			return
-
 		print """
 <h1>Edit log</h1>
 <p>Only editors have the power to change the entries that
@@ -1162,14 +1163,6 @@ class config_handler(user_validator):
 		y.title = 'Options for %s' % (y.server)
 
 	def body(self, y):
-		if not y.is_real_user():
-			print '<p>Sorry, you can\'t set the options for'
-			print 'a server unless you'
-			print '<a href="%s">log in to' % (
-				y.uri('login', None, 1))
-			print 'it</a>.</p>'
-			return
-
 		if y.form.has_key("yes"):
 			self.submit(y)
 		else:
@@ -1775,3 +1768,22 @@ class catchup_handler(handler_ancestor):
 
         def title(self):
             return 'catch&nbsp;_up'
+
+################################################################
+
+# Some stubs which will be coming in a later version:
+
+class nyi(handler_ancestor):
+	def head(self, y):
+		y.title = 'Not yet implemented'
+	def body(self, y):
+		print 'Not yet implemented.  Coming in a later version.'
+	def title(self):
+		return None
+	def privilege(self):
+		return 3
+
+class edit_handler(nyi):
+	pass
+class diff_handler(nyi):
+	pass

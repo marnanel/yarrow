@@ -290,7 +290,7 @@ ul.others { list-style-type: square; font-style: italic; }
 			if self.connection:
 				def usable(have, need):
 					if need==-2:
-						return True
+						return True # always visible
 					elif need==-1:
 						return have==0
 					else:
@@ -536,7 +536,7 @@ before the HTML starts printing."""
 		elif tasklist.has_key(self.verb+'_handler'):
 			# Ah, we know about what they wanted to do.
 			# Create them a handler to do it for them.
-			self.verb_handler = tasklist[self.verb+'_handler']()
+			self.verb_handler = tasklist[self.verb+'_handler']().allowed(self)
 		else:
 			# No idea about that. Use the handler that tells them
 			# that we don't understand.
