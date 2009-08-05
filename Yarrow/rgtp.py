@@ -236,7 +236,8 @@ class base:
 
 	def receive(self):
 		temp = string.rstrip(self.incoming.readline())
-		temp = temp.decode(self.encoding).encode('utf-8')
+		# FIXME: Removing this line makes it work.  Why?  It should be vital!
+		#temp = temp.decode(self.encoding).encode('utf-8')
 		if self.logging: self.log = self.log + "\n<" +temp
 		return temp
 
@@ -261,7 +262,10 @@ class fancy:
 	base = 0
 	access_level = 0
 
-	def __init__(self, host, port, logging):
+	def __init__(self,
+		     host='rgtp-serv.groggs.group.cam.ac.uk',
+		     port=1431,
+		     logging=0):
 		class first_connect(callback):
 			access_level = 0
 			def __call__(self, message):
@@ -495,6 +499,13 @@ class fancy:
 		# So, did it work?
                 if target > self.access_level:
 			raise RGTPException("Sorry: try logging in with a more privileged account.");
+
+	def backdoor(self):
+		"""Allows access to the test server's backdoor
+		(gives editor powers for experimentation)"""
+		for i in range(0, 3):
+			self.base.send('DBUG', expect(200))
+		self.login('yarrow@example.com', 0)
 
 	def stat(self, id):
 		class status_reader(callback):

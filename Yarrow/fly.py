@@ -76,3 +76,16 @@ class webfly:
 				self.headers[anything])
 
 		return self.other_header_strings + result
+
+	def print_to(self, target, should_compress=False, received_etag=''):
+		"""Dumps our contents to |target|.  If |received_etag|
+		is equal to the etag we would have set, writes a "not modified"
+		message instead.  If |should_compress|, compresses the output."""
+
+		if received_etag==self.etag():
+			target.write('Status: 304 Hi again :)')
+		else:
+			if should_compress:
+				self.compress()
+			target.write(self.cgi_headers()+'\r\n')
+			target.write(self.content())

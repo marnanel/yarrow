@@ -84,6 +84,7 @@ class user:
 		store.close()
 		mutex.drop()
 
+# XXX This should go away
 class visitor(user):
 	"Represents a casual user of the system whose name we don't know."
 	def __init__(self):
@@ -146,11 +147,13 @@ def from_session_key(key):
 	else:
 		return None
 
-def create(username, password):
+def create(userid, secret, server):
 	"""Creates a new user with a random username and no password, and
 writes it out to backing storage."""
 
 	result = user(common.random_hex_string())
+	result.set_state(server, 'userid', userid)
+	result.set_state(server, 'secret', secret)
 	result.save(1)
 
 	return result

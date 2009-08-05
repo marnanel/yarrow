@@ -27,7 +27,7 @@ import os.path
 # The line below beginning "baseconf" is modified by the installation script
 # to point at your base config file for yarrow. If you need to put that
 # somewhere else, modify this line yourself.
-baseconf = '/home/xf/marnanel/proj/yarrow/yarrow.conf'
+baseconf = '/service/website/rgtp.thurman.org.uk/conf/yarrow.conf'
 
 settings = ConfigParser.ConfigParser()
 settings.read(baseconf)
@@ -80,6 +80,7 @@ def server_details(name):
 		'host': address[0],
 		'port': port,
 		'description': value(section, 'description'),
+		'backdoor': value(section, 'backdoor'),
 		'longdesc': longdesc,
 		}
 
