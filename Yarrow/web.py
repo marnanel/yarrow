@@ -63,8 +63,6 @@ class yarrow:
 		self.title = 'Reverse Gossip'
 
 		# Name of the server.
-		# FIXME: replace with server_details[n] --
-		# or make that a dictionary?
 		self.server = ''
 
 		# What they want us to do.
@@ -498,20 +496,19 @@ ul.others { list-style-type: square; font-style: italic; }
 			self.outgoing_cookies[yarrow_return]['expires'] = one_day
 
 		# Pick up config settings for this server.
-		# FIXME: Do this by looping over a dictionary
-		if self.user:
-			self.reformat = self.user.state(self.server,
-							'reformat', 1)
-			self.log = self.user.state(self.server, 'log', 0)
-			self.uidlink = self.user.state(self.server, 'uidlink', 1)
-			self.readmyown = self.user.state(self.server, 'readmyown', 1)
-			self.accesskeys = self.user.state(self.server, 'accesskeys', 3)
-		else:
-			self.reformat = 1
-			self.log = 0
-			self.uidlink = 1
-			self.readmyown = 0 # but you can't post anyway
-			self.accesskeys = 3
+		pickup = {
+			'reformat': 1,
+			'log': 0,
+			'uidlink': 1,
+			'readmyown': 1,
+			'accesskeys': 3,
+			}
+
+		for k in pickup.keys():
+			if self.user:
+				self.__dict__[k] = self.user.state(self.server, k, pickup[k])
+			else:
+				self.__dict__[k] = pickup[k]
 
 		if self.verb=='':
 			if self.server=='':
