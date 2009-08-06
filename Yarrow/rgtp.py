@@ -24,6 +24,12 @@ import binascii
 import wrapping
 import common
 
+################################################################
+#
+# FIXME: Long writeup of this module.
+#
+# FIXME: interpreted_index should have a sane docstring.
+#
 ###########################################################
 
 class RGTPException (Exception):
@@ -36,6 +42,8 @@ class RGTPException (Exception):
 		return self.name
 
 # And all the subclasses:
+
+# FIXME: How about including HTTP equivalents as a field?
 
 class RGTPTimeoutException(RGTPException):
 	"Problem due to timeouts somewhere along the line."
@@ -134,17 +142,26 @@ class response:
 ###########################################################
 
 class callback:
-	"The 'base' class gives RGTP messages to callbacks of this form."
+	"""A class which knows how to deal with one aspect of RGTP."""
+	# FIXME: "callback" is a crappy name.
+
+	def __init__(self):
+		# By default, returns the callback itself, so that it can be inspected.
+		self.answer = self
 
 	def __call__(self, message):
 		"""Deals with an incoming RGTP message.
-|message| is of type Message."""
+|message| is of type "response"."""
 		pass
 
 	def done(self):
 		"""Returns 1 iff 'base' can throw this callback away now.
 This will not be checked until __call__() has been called at least once."""
 		return 1
+
+	def result(self):
+		"""Returns whatever the callback was supposed to find out."""
+		return self.answer
 
 ###########################################################
 
@@ -153,10 +170,13 @@ class expect(callback):
 the callback finishes quietly if the first message has that number, and
 throws an exception if it does not."""
 	def __init__(self, expectation):
+		callback.__init__(self)
 		self.desideratum = expectation
 
 	def __call__(self, message):
 		if message.code() != self.desideratum:
+			# FIXME: This should be one of our own exception classes,
+			# not a string
 			raise "Expected %s, but got %s." % (
 				str(self.desideratum),
 				message,
@@ -165,8 +185,11 @@ throws an exception if it does not."""
 ###########################################################
 
 class multiline(callback):
-
+	"""The ancestor of complex callbacks which deal with
+RGTP transactions extending over multiple lines.  Not usable
+in itself."""
 	def __init__(self):
+		callback.__init__(self)
 		self.finished = 0
 
 	def complete(self):
@@ -178,9 +201,12 @@ class multiline(callback):
 ###########################################################
 
 class stomach(multiline):
+	"""The ancestor of all callbacks which expect some
+multi-line data and need it stored somewhere.  Perfectly
+usable in itself."""
 	def __init__(self):
 		multiline.__init__(self)
-		self.stuff = []
+		self.answer = []
 
 	def __call__(self,message):
 		self.eat(message)
@@ -189,7 +215,7 @@ class stomach(multiline):
 		if message.code()==250:
 			pass # data coming up-- good
 		elif message.code()==-1:
-			self.stuff.append(message.text())
+			self.answer.append(message.text())
 		elif message.code()==0:
 			self.complete()
 		else:
@@ -209,10 +235,9 @@ class base:
 		self.incoming = sock.makefile("r")
 		self.outgoing = sock.makefile("w")
 		self.encoding = encoding
-		self.cback = cback
-		self.get_line()
+		self._get_line(cback)
 
-	def get_line(self):
+	def _get_line(self, cback):
 		looping = 1
 
 		while looping:
@@ -222,17 +247,17 @@ class base:
 			while len(temp)==0:
 				temp = self.receive()
 				message = response(temp)
-				self.cback(message)
+				cback(message)
 
 			if message.code()==250: # Magic value for continuations
 				while temp!='.':
 					temp = self.receive()
 					if temp!='.':
-						self.cback(response(temp, -1))
-				self.cback(response('', 0))
+						cback(response(temp, -1))
+				cback(response('', 0))
 
 			# okay. Ask whether we should go round again.
-			looping = not self.cback.done()
+			looping = not cback.done()
 
 	def receive(self):
 		temp = string.rstrip(self.incoming.readline())
@@ -250,9 +275,9 @@ class base:
 
 	def send(self, message, cback):
 		"Sends one line to the server, and waits for a response."
-		self.cback = cback
 		self.raw_send(message.decode('utf-8').encode(self.encoding))
-		self.get_line()
+		self._get_line(cback)
+		return cback.result()
 
 ###########################################################
 
@@ -266,6 +291,7 @@ class fancy:
 		     host='rgtp-serv.groggs.group.cam.ac.uk',
 		     port=1431,
 		     logging=0):
+
 		class first_connect(callback):
 			access_level = 0
 			def __call__(self, message):
@@ -309,20 +335,22 @@ class fancy:
 				elif message.code()==130:
 					pass # ignore this
 				elif message.code()>=230 and message.code()<=233:
-					self.access_level = message.code()-230
+					self.answer = message.code()-230
 					self.complete()
 				elif message.code()==482 or message.code()==483 or message.code()==432 or message.code()==433:
 					raise RGTPException("Failed to log you in - " + message.text())
 				else:
 					raise RGTPException("Wasn't expecting " + str(message))
 
-		towel = authorise(self.base, email, sharedsecret)
-		self.base.send("USER "+email, towel)
-		self.access_level = towel.access_level
+		# FIXME: Should callbacks have access to the base object?
+		# This one does; regu, in a very similar circumstance,
+		# does not, and we have to call the second part for it.
+		self.access_level = self.base.send(
+			"USER "+email,
+			authorise(self.base, email, sharedsecret))
 
 	def request_account(self, email):
 		class regu_handler(stomach):
-
 			def __init__(self):
 				stomach.__init__(self)
 
@@ -342,33 +370,28 @@ class fancy:
 		if email!=None:
 			try:
 				self.base.send("USER "+email, towel)
-				return towel.answer
 			except RGTPServerException, rse:
 				return (0, str(rse))
-		else:
-			return towel.stuff
+		return towel.answer
 
 	def motd(self):
-		towel = stomach()
-		self.base.send("MOTD", towel)
-		return towel.stuff
+		return self.base.send("MOTD", stomach())
 
 	def index(self, since=None, since_is_date=0):
 		class index_reader(multiline):
 			def __init__(self):
 				multiline.__init__(self)
-				self.result = []
+				self.answer = []
 
 			def __call__(self, message):
 				if message.code()==-1:
 					b = message.text()
-					self.result.append((string.strip(b[0:8]), string.strip(b[9:17]),
+					self.answer.append((string.strip(b[0:8]), string.strip(b[9:17]),
 						string.strip(b[18:26]), string.strip(b[27:102]),
 						b[103], string.strip(b[105:])))
 				elif message.code()==0:
 					self.complete()
 
-		towel = index_reader()
 		if since:
 			if since_is_date:
 				request = 'INDX %08x' % (since)
@@ -377,8 +400,7 @@ class fancy:
 		else:
 			request = 'INDX'
 
-		self.base.send(request, towel)
-		return towel.result
+		return self.base.send(request, index_reader())
 
 	def logout(self):
 		if self.access_level != 0:
@@ -392,7 +414,7 @@ class fancy:
 		class item_reader(multiline):
 			def __init__(self):
 				multiline.__init__(self)
-				self.result = []
+				self.answer = []
 				self.firstline = 0
 				self.buffer = ''
 				self.subject = ''
@@ -441,7 +463,7 @@ class fancy:
 							# Well, just give them the address again.
 							grogname = author
 
-					self.result.append({'grogname': grogname,
+					self.answer.append({'grogname': grogname,
 						'date': date,
 						'author': author,
 						'message': lines,
@@ -455,7 +477,7 @@ class fancy:
 					if self.firstline:
 						self.firstline = 0
 						# should parse it, but...
-						self.result.append(text)
+						self.answer.append(text)
 
 					elif text!='' and text[0]=='^' and text[1]!='^':
 						self.put_buffer()
@@ -474,9 +496,7 @@ class fancy:
 				elif message.code()==250:
 					self.firstline = 1
 
-		towel = item_reader()
-		self.base.send("ITEM "+id, towel)
-		return towel.result
+		return self.base.send("ITEM "+id, item_reader())
 
         def raise_access_level(self, target=None, user=None, password=None, tryGuest=0):
 		# Set target==None to get as high as we can with current
@@ -511,7 +531,7 @@ class fancy:
 		class status_reader(callback):
 			def __call__(self, message):
 				if message.code()==211:
-					self.result = message.text()
+					self.answer = message.text()
 				elif message.code()==410:
 					raise RGTPException("Not available: "+message.text())
 				else:
@@ -529,9 +549,8 @@ class fancy:
 			else:
 				return int(thing, 16)
 
-		towel = status_reader()
-		self.base.send("STAT "+id, towel)
-		r = towel.result
+		r = self.base.send("STAT "+id, status_reader())
+
 		return {'from': maybe_blank(r[0:8]),
 			'to': maybe_blank(r[9:17]),
 			'edited': maybe_hex(maybe_blank(r[18:26])),
@@ -680,7 +699,7 @@ Failure cases:
 			def __init__(self):
 				multiline.__init__(self)
 				self.state = 0
-				self.result = []
+				self.answer = []
 
 			def __call__(self, message):
 				if message.code()==-1:
@@ -708,42 +727,43 @@ Failure cases:
 							self.change['sequence'] = ''
 					elif self.state==1:
 						self.change['reason'] = message.text()
-						self.result.append(self.change)
+						self.answer.append(self.change)
 
 					self.state = (self.state+1)%3
 
 				elif message.code()==0:
 					self.complete()
 
-		towel = edit_log_reader()
-		self.base.send("ELOG", towel)
-		return towel.result
+		return self.base.send("ELOG", edit_log_reader())
 
 	def diff(self, itemid):
 		"""
 Returns the changes made by an editor to an item.
 |itemid| may be None, in which case the index is diffed."""
 		class diff_reader(multiline):
+			# FIXME: this should be a subclass of stomach
 			def __init__(self):
 				multiline.__init__(self)
 				self.state = 0
-				self.result = []
+				self.answer = []
 
 			def __call__(self, message):
-				if message.code()==-1:
-					self.result.append(message.text())
-				elif message.code()==0:
+				code = message.code()
+				if code==-1:
+					self.answer.append(message.text())
+				elif code==0 or code==410:
 					self.complete()
 
-		towel = diff_reader()
 		if itemid:
-			self.base.send("DIFF "+itemid, towel)
+			diff = 'DIFF '+itemid
 		else:
-			self.base.send("DIFF", towel)
-		return towel.result
+			diff = 'DIFF'
+
+		return self.base.send(diff, diff_reader())
 
 	def literal(self, strings):
 		"Sends a series of literal commands to the server. Ignores the results."
+		# FIXME this is not used any more
 
 		dummy = callback()
 
@@ -752,10 +772,8 @@ Returns the changes made by an editor to an item.
 				self.base.send(thing, dummy)
 
 	def udbm(self, command=''):
-		towel = stomach()
 		command = ('UDBM '+command).strip()
-		self.base.send(command, towel)
-		return towel.stuff
+		return self.base.send(command, stomach())
 
 	def set_motd(self):
 		"Sets the MOTD to the data you most recently sent."

@@ -40,6 +40,8 @@ def index(name, rgtp_server):
 
 	current = None
 
+	# FIXME: If reading the indexes file causes an exception,
+	# we should just assume we have no cache.
 	if indexes.has_key(name):
 		# AND the version is current
 		# AND the datestamp is recent

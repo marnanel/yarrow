@@ -32,8 +32,62 @@ import random
 import os
 
 ################################################################
-
-# METHODS WHICH SHOULD PROBABLY GO IN THE SUPERCLASS OR IN YARROW
+#
+# Each of the classes defined in this file represents an action
+# which can be carried out when a particular URL is requested.
+# The classes whose name ends with "_handler" (such as read_handler)
+# are automatically called when a URL such as
+#
+#      ... /yarrow.cgi/servername/itemid/handlername
+#
+# is called.  The only restriction on the names of handlers is
+# that they may not be eight characters long; this allows them
+# to be trivially distinguished from itemids.
+#
+# These are the important methods within each handler:
+#
+#  head:
+#    sets up variables before the HTML starts printing;
+#    in particular, should set y.title to the title of the
+#    HTML page.  Should not print anything.
+#  body:
+#    performs whatever actions are necessary, and prints
+#    HTML to standard output about it.
+#  allowed:
+#    returns self if the user is allowed to use this handler;
+#    otherwise returns a handler object which will explain what
+#    the problem was.
+#  privilege:
+#    returns -1 for handlers which are only available when
+#    logged out, -2 for handlers which are only available when
+#    logged in, and non-negative numbers for the minimum security
+#    level needed to use this handler.  Defaults to 1.
+#  title:
+#    the name of the handler as it should appear in the sidebar;
+#    returns None if it should not appear in the sidebar.  Access
+#    keys should be preceded by underscores.  Defaults to the
+#    name of the handler, preceded by an underscore.
+#  sortkey:
+#    returns a string which is used to sort the handler on the
+#    sidebar.  Defaults to the name of the handler.
+#
+# If a handler is visible in the sidebar, its docstring is used
+# as the mouseover title for the link.
+#
+# FIXME: Many of these methods take a symbiotic "yarrow" object,
+# identified by "y", as a parameter.  It would probably be more
+# sensible if this was automatically passed to the constructor
+# and kept as a member variable.
+#
+# FIXME: I wrote this in 2002, before I knew as much as I know
+# now about tempating systems.  The HTML text within each handler
+# will be stripped out and put into templates in some upcoming
+# version.
+#
+# FIXME: The functions at the beginning should become methods
+# either of yarrow or of some or all handlers.
+#
+################################################################
 
 def mailto(address, linking=0):
 	"""Returns an HTML snippet containing a mailto link for
@@ -70,22 +124,31 @@ other than GROGGS use only the full network domain.)"""
 							     suffix,
 							     address)
 
-def html_print(message, grogname, author, time, y, seq=None):
+def html_print(message, grogname, author, timestamp, y, seq=None):
 	"""Prints one of the sections of an item which contains
 	one reply and the banner across the top."""
-
 	# First: the banner across the top...
 
+	if timestamp:
+		timestamp = time.strftime(
+			"%a %d %b %Y %I:%M:%S%P",
+			time.localtime(timestamp))
+	else:
+		timestamp = ''
+
 	if grogname:
+		print '<a name="%x"></a>' % (seq)
 		print '<table class="reply" width="100%"><tr>'
 
 		print '<th rowspan="2">' + linkify(y, grogname) + '</th>'
 		print '<td>' + mailto(author, y.uidlink)
 		if seq:
-			print '<a href="#'+ seq +'" class="seq">' +\
-			      '(#'+seq+')</a>'
+			print '<a href="#%x" class="seq">(#%x)</a>' % (seq, seq)
 		print '</td></tr>'
-		print '<tr><td>' + time + '</td></tr></table>'
+		print '<tr><td>%s</td></tr></table>' % (timestamp)
+
+	if not message:
+		return
 
 	# Get rid of useless whitespace...
 	while len(message)!=0 and message[0]=='': message = message[1:]
@@ -104,6 +167,8 @@ def html_print(message, grogname, author, time, y, seq=None):
 			# break at the ends of lines.
 			print '<br>'
 	print '</p>'
+	if seq:
+		print '<a name="after-%x"></a>' % (seq)
 
 def linkify(y, text):
 	"""Adds hyperlinks to |text|. Automatically calls cgi.escape()
@@ -131,6 +196,7 @@ def linkify(y, text):
 
 	return temp
 
+# FIXME: This belongs in the exception classes themselves
 def http_status_from_exception(e):
 	"""Returns a properly-formatted Status: line for return
 	in the CGI headers. The line will contain a HTTP status
@@ -154,8 +220,7 @@ def http_status_from_exception(e):
 	elif ec is rgtp.RGTPAuthException:
 		# You'd think this would be 403: Forbidden...
 		# but actually it makes more sense for it
-		# to be 200: OK, because people need to see the
-		# "visitor" button, and the error code can make
+		# to be 200: OK, because the error code can make
 		# intermediate agents hide the http body.
 		# (In particular, it means you can't set any browse
 		# page as a Freshmeat demo site.)
@@ -210,7 +275,7 @@ class handler_ancestor:
 	sidebar."""
         name = self.__class__.__name__
         if not name.endswith('_handler'):
-            return ''
+            return None
         else:
             return '_'+name[:-8]
 
@@ -276,7 +341,7 @@ class privilege_error(handler_ancestor):
 
 	def allowed(self, y):
 		"should never be called, but for the sake of clarity"
-		return True
+		return self
 
 class only_when_logged_in(privilege_error):
 	def body(self, y):
@@ -338,16 +403,12 @@ class read_handler(handler_ancestor):
 	def print_item(self, y):
 		for i in self.item[1:]:
 
-			seq = "%x" % (i['sequence'])
-			
-			print '<hr class="invisible"><a name="'+seq+'"></a>'
+			print '<hr class="invisible">'
 			html_print(i['message'], i['grogname'],
 				   i['author'],
-				   time.strftime("%a %d %b %Y %I:%M:%S%P",
-						 time.localtime(i['timestamp'])),
+				   i['timestamp'],
 				   y,
-				   seq)
-			print '<a name="after-'+seq+'"></a>'
+				   i['sequence'])
 
 	def possibly_link(self, y, title, key, anchor):
 		"""If we have a continuation in direction 'key',
@@ -575,9 +636,14 @@ class motd_handler(handler_ancestor):
 		# (maybe also have a param "return None if the sequence
 		# is <= N")
 
-		motd = y.connection.motd()[1:]
+		motd = y.connection.motd()
+		# XXX FIXME These are backwards on GROGGS.
+		# XXX Should we ask for this to be fixed?
+		timestamp = int(motd[0][0:8], 16)
+		sequence = int(motd[0][9:], 16)
 		
-		html_print(motd, None, None, None, y)
+		html_print(motd[1:], 'Message of the day', 'The Editors',
+			   timestamp, y, sequence)
 
 		# Editors get extra stuff:
 		if y.connection.access_level > 2:
@@ -589,7 +655,7 @@ please enter the new text into the box below.</p>
 <textarea style="width: 99%%" cols="50"
 class="textbox" rows="10" name="data">""" % (
 				y.uri('motd'))
-			for line in motd:
+			for line in motd[1:]:
 				print line
 			print '</textarea>'
 			print '<input type="submit" value=" Modify "></form>'
@@ -907,25 +973,6 @@ class post_handler(handler_ancestor):
 		y.title = 'Post to %s' % (y.server)
 
 	def body(self, y):
-
-		if y.connection.access_level < 2:
-			print '<h1>You don\'t have permission to post.</h1>'
-
-			if not y.is_real_user():
-				print '<p>Maybe you should try '+\
-				'<a href="%s">logging ' % (
-					y.uri('login', None, 1),
-					) +\
-				'in</a>.</p>'
-
-			print '<p>You might want to '+\
-			      '<a href="%s">return ' % (
-				y.uri(),
-				) +\
-			      'to the index</a>.</p>'
-
-			return
-		
 		if y.form.has_key('data'):
 			self.submit(y)
 		else:
@@ -980,10 +1027,13 @@ class post_handler(handler_ancestor):
 				y.uri(details['itemid']),
 				details['sequence'])
 
-			if y.readmyown:
+			if y.user and y.readmyown:
 				# We've read our own comments; update the
 				# "most recent sequence" number of this item
 				# to show so.
+
+				if y.user and not y.user.last_sequences.has_key(y.server):
+					y.user.last_sequences[y.server] = {} # Stop errors below...
 
 				y.user.last_sequences[y.server][details['itemid']]=details['sequence']
 				y.user.save()
@@ -1069,9 +1119,17 @@ the item itself, to explain.</p>
 		edits = y.connection.edit_log()
 		edits.reverse()
 
+		is_editor = False
+		if y.connection:
+			is_editor = y.connection.access_level>2
+
 		for thing in edits:
 			print '<tr>'
+			item = None
 			if thing.has_key('item'):
+				item = thing['item']
+
+			if item:
 				print '<td>'
 				if thing['action']=='withdrawn':
 					print thing['item']
@@ -1082,8 +1140,20 @@ the item itself, to explain.</p>
 				print '<td><a href="%s">' % (
 					y.uri())
 				print '<i>index</i></a></td>'
+
 			print '<td>'+thing['date']+'</td>'
-			print '<td>'+thing['action']+'</td>'
+
+			if is_editor:
+				if item:
+					difflink = item+'/diff#'+thing['sequence'][2:10]
+				else:
+					difflink = 'diff'
+				print '<td><a href="%s">%s</a></td>' % (
+					difflink,
+					thing['action']
+					)
+			else:
+				print '<td>'+thing['action']+'</td>'
 			print '<td>'+thing['editor']+'</td>'
 			print '<td>'+linkify(y, thing['reason'])+'</td>'
 			print '</tr>'
@@ -1321,7 +1391,7 @@ nargery</a>, you probably don't want this turned on.</p>
 		def put_meta_field(y, field, value):
 			y.user.set_state(y.server, field, value)
 
-		(userid, secret) = self.validate_user()
+		(userid, secret) = self.validate_user(y)
 
 		# Right. Before we can treat this as valid, we must attempt to log in
 		# using it, and see what happens. (Since this is separate from the
@@ -1329,13 +1399,15 @@ nargery</a>, you probably don't want this turned on.</p>
 		# work anyway? Should it? Find out.]
 
 		if userid:
-			level = self.is_real_account(host, port, userid, secret)
+			level = self.is_real_account(y.server_details['host'],
+						     y.server_details['port'],
+						     userid, secret)
 
 			if level:
 				put_meta_field(y, 'userid', userid)
 				put_meta_field(y, 'secret', secret)
 
-				y.connection.access_level = result
+				y.connection.access_level = level
 				self.show_congratulations(y)
 			else:
 				print '<h1>Authentication failure</h1>'
@@ -1427,16 +1499,13 @@ class unknown_command:
 ################################################################
 
 class unknown_server_login:
-	def __init__(self, server_name):
-		self.server_name = server_name
-
 	def head(self, y):
-		y.title = "Unknown server - " + self.server_name
+		y.title = "Unknown server - " + y.server
 		y.fly.set_header('Status','404 Unknown server')
 
 	def body(self, y):
 		print '<h1>Unknown server</h1>'
-		print '<p>I don\'t know a server named '+self.server_name+'.'
+		print '<p>I don\'t know a server named '+y.server+'.'
 		print '(Here\'s <a href="%s">the servers I do know</a>.)</p>' % (
 			y.uri(None, ''))
 
@@ -1703,11 +1772,6 @@ class users_handler(handler_ancestor):
 		print '<h1>%s user database manager</h1>' % (
 			y.server)
 		
-		if y.connection.access_level < 3:
-			# Errrr nope. You need to be an editor to do this.
-			print 'You need to be an editor to use the database manager.'
-			return
-		
 		command = ''
 		if y.form.has_key('command'):
 			command = y.form['command'].value
@@ -1728,6 +1792,59 @@ class users_handler(handler_ancestor):
 
         def title(self):
             return '_accounts'
+
+        def privilege(self):
+            return 3
+
+################################################################
+
+class diff_handler(handler_ancestor):
+        "View individual edits made by Editors."
+	def head(self, y):
+		self.item = y.item
+		if not self.item: self.item = 'the index'
+		y.title = 'View edits to '+self.item
+
+	def body(self, y):
+		print '<h1>'+linkify(y, 'Edits to %s' % (self.item))+'</h1>'
+		
+		details = {}
+		for edit in y.connection.edit_log():
+			if edit.get('item')==self.item:
+				details[edit['sequence'][2:10]] = edit
+
+		print '<pre>'
+		for diff in y.connection.diff(y.item):
+			if diff.startswith('+++'):
+				pass # ignore, we already know this
+			elif diff.startswith('---'):
+				seq=diff[20:28]
+				timestamp=diff[29:]
+				d=details[seq]
+				print '</pre><a name="%s"></a>' % (seq)
+				html_print(None,
+					   d['reason'],
+					   d['editor'],
+					   int(timestamp, 16),
+					   y, int(seq, 16))
+				print '<pre>'
+			elif diff.startswith('+'):
+				print '<span style="color:blue">%s</span>' % (cgi.escape(diff))
+			elif diff.startswith('-'):
+				print '<span style="color:red">%s</span>' % (cgi.escape(diff))
+			elif diff.startswith('@'):
+				print '<span style="color:green">%s</span>' % (cgi.escape(diff))
+			else:
+				print '%s' % (cgi.escape(diff))
+		print '</pre><ul class="others">'
+		if y.item:
+			print '<li>View <a href="%s">the current version of this item.</a></li>' % (
+				y.uri(y.item))
+		print '<li>Return to <a href="%s">the edit log.</a></li>' % (y.uri('editlog'))
+		print '</ul>'
+
+        def title(self):
+            return None
 
         def privilege(self):
             return 3
@@ -1773,17 +1890,26 @@ class catchup_handler(handler_ancestor):
 
 # Some stubs which will be coming in a later version:
 
-class nyi(handler_ancestor):
+class edit_handler(handler_ancestor):
 	def head(self, y):
-		y.title = 'Not yet implemented'
+		if y.item:
+			y.title = 'Editing '+y.item
+		else:
+			y.title = 'Editing the index'
+
 	def body(self, y):
-		print 'Not yet implemented.  Coming in a later version.'
+		if not y.item:
+			print '<h1>Editing the index</h1>'
+			print '<p>This is very much not implemented.</p>'
+			return
+
+		print '<h1>'+linkify(y, 'Editing '+y.item)+'</h1>'
+
+		print '<p>Warning: This is not properly implemented.'
+		print 'Proceed at your own risk!</p>'
+
 	def title(self):
 		return None
 	def privilege(self):
 		return 3
 
-class edit_handler(nyi):
-	pass
-class diff_handler(nyi):
-	pass

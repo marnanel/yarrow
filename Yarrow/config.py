@@ -24,10 +24,11 @@ import ConfigParser
 import string
 import os.path
 
+# FIXME: This should be taken from the environment.
 # The line below beginning "baseconf" is modified by the installation script
 # to point at your base config file for yarrow. If you need to put that
 # somewhere else, modify this line yourself.
-baseconf = '/service/website/rgtp.thurman.org.uk/conf/yarrow.conf'
+baseconf = '/service/website/marnanel.org/conf/yarrow.conf'
 
 settings = ConfigParser.ConfigParser()
 settings.read(baseconf)

@@ -180,17 +180,18 @@ class yarrow:
 						     server['port'],
 						     self.log)
 
+                        if self.verb in ['newbie']:
+                                # Some verbs must not have a connection
+                                # set up when processing them.
+                                # (Rather an ugly hack, yes :( )
+                                return
+
 			if server['backdoor']:
 				self.connection.backdoor()
 				self.logging_in_status = 'ok'
 				# XXX FIXME: Also log them into Yarrow here?
 				return
 
-                        if self.verb in ['newbie']:
-                                # Some verbs must not have a connection
-                                # set up when processing them.
-                                # (Rather an ugly hack, yes :( )
-                                return
 			try:
 				if self.user:
 					self.connection.raise_access_level(
