@@ -30,6 +30,7 @@ import user
 import config
 import random
 import os
+import md5
 
 ################################################################
 #
@@ -517,6 +518,10 @@ class read_handler(handler_ancestor):
 		# List some other places they might be interested in going.
 		
 		print '<ul class="others">'
+
+		if y.connection.access_level>2:
+			print '<li><a href="%s">Edit or withdraw</a> this item.</li>' % (
+				y.uri(y.item + '/edit'))
 
 		if self.status and (self.status['from'] or self.status['to']):
 			print '<li>Read <a href="%s">this ' % (
@@ -1145,7 +1150,9 @@ the item itself, to explain.</p>
 
 			if is_editor:
 				if item:
-					difflink = item+'/diff#'+thing['sequence'][2:10]
+					seq = thing['sequence'][2:-2]
+					if not seq: seq = '0'
+					difflink = '%s/diff#%x' % (item, int(seq, 16))
 				else:
 					difflink = 'diff'
 				print '<td><a href="%s">%s</a></td>' % (
@@ -1811,7 +1818,7 @@ class diff_handler(handler_ancestor):
 		details = {}
 		for edit in y.connection.edit_log():
 			if edit.get('item')==self.item:
-				details[edit['sequence'][2:10]] = edit
+				details[edit['sequence'][-10:-2]] = edit
 
 		print '<pre>'
 		for diff in y.connection.diff(y.item):
@@ -1820,7 +1827,10 @@ class diff_handler(handler_ancestor):
 			elif diff.startswith('---'):
 				seq=diff[20:28]
 				timestamp=diff[29:]
-				d=details[seq]
+				if details.has_key(seq):
+					d=details[seq]
+				else:
+					d={'reason': '?', 'editor': '?'}
 				print '</pre><a name="%s"></a>' % (seq)
 				html_print(None,
 					   d['reason'],
@@ -1897,16 +1907,71 @@ class edit_handler(handler_ancestor):
 		else:
 			y.title = 'Editing the index'
 
+	def digest(self, string):
+		hash = md5.new()
+		hash.update(string)
+		return hash.hexdigest()
+
 	def body(self, y):
 		if not y.item:
 			print '<h1>Editing the index</h1>'
 			print '<p>This is very much not implemented.</p>'
 			return
 
+		if y.form.has_key("reason") and \
+			    y.form.has_key('digest') and \
+			    y.is_post_request():
+			self.submit(y)
+		else:
+			self.form(y)
+
+	def submit(self, y):
+
+		content = ''
+		if y.form.has_key('content'):
+			content = y.form['content'].value
+
+		y.connection.edit(y.item,
+				  content,
+				  y.form['digest'].value,
+				  y.form['reason'].value)
+		print '<h1>Item edited.</h1>'
+		print '<p>The item was edited.'
+		print 'You can <a href="%s">view it here</a>.</p>' % (
+			y.uri(y.item))
+
+	def form(self, y):
 		print '<h1>'+linkify(y, 'Editing '+y.item)+'</h1>'
 
-		print '<p>Warning: This is not properly implemented.'
-		print 'Proceed at your own risk!</p>'
+		print '<form action="%s" method="post">' % (y.uri(y.item+'/edit'))
+		
+		print '<p><strong>Warning: This is half-implemented;'
+		print 'proceed at your own risk!</strong>'
+		print 'You are editing an item.  You may change the text'
+		print 'below as you see fit, but please be careful.'
+		print 'Your changes will be visible to all other Editors'
+		print 'in the <a href="%s">edit log</a>.' % (y.uri('editlog'))
+		print 'If you delete <em>all</em> the text,'
+		print 'the item will be withdrawn rather than edited.'
+		print 'Lines beginning with a single caret ("^") mark'
+		print 'the starts of replies; you should probably leave'
+		print 'these as they are.</p>'
+
+		item = y.connection.item_plain(y.item)
+		print '<input type="hidden" name="digest" value="%s"/>' % (
+			self.digest(''.join(item)))
+		print '<textarea style="color:red;width: 100%" '+\
+		    'cols="80" rows="20" name="content">'
+		for line in item[1:]:
+			print cgi.escape(line)
+		print '</textarea>'
+
+		print '<p>You must give a reason for this edit.  Traditionally'
+		print 'you should give the reason both in the box below and'
+		print 'within square brackets in the actual item text.</p>'
+		print '<input name="reason" style="width:100%"/>'
+
+		print '<input type="submit" value=" Edit "/></form>'
 
 	def title(self):
 		return None

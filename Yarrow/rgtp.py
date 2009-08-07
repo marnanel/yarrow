@@ -1,6 +1,6 @@
 "RGTP client library."
 
-# Copyright (c) 2002 Thomas Thurman
+# Copyright (c) 2002-9 Thomas Thurman
 # thomas@thurman.org.uk
 # 
 # This program is free software; you can redistribute it and/or modify
@@ -26,9 +26,52 @@ import common
 
 ################################################################
 #
-# FIXME: Long writeup of this module.
+# This module implements an RGTP client.
 #
-# FIXME: interpreted_index should have a sane docstring.
+# It contains four parts:
+#
+# base:
+#  a simple client which knows how to connect, and how to send
+#  and receive data, but not much else.  This class defers
+#  dealing with the actual data to...
+#
+# callbacks:
+#  several classes to which the "base" class delegates dealing
+#  with the actual data from various commands.
+#  (Singleton instances of callbacks tend to be named "towel",
+#  for some reason.)
+#
+# fancy:
+#  a full-featured RGTP client constructed from "base" and
+#  a few dozen callbacks.
+#
+# interpreted_index:
+#  a class which can read an index in the form in which it
+#  crosses the wire, and return useful subsets of the data
+#  therein.
+#
+# FIXME: callbacks should be called "interpreters" or "drivers"
+#  or "controllers" or something.
+#
+# FIXME: although callbacks are well-designed for reading
+#  the data from the server, they are ill-equipped for sending
+#  anything back.  This is necessary in several places, so
+#  various approaches have evolved: some callbacks keep a copy
+#  of "base" and write to it, some rely on "fancy" passing them
+#  in multiple times.  Also:
+#
+# TODO: If callbacks were able to write to the server as
+#  well as read from it, most or all of the methods in "fancy"
+#  would be possible using only one line of code and a callback
+#  class.  It might be possible just to have the callbacks
+#  and be done with it.  One possible way this could be done is
+#  to use continuations: the "callback" would yield an object of
+#  class sending(<MESSAGE>), class receiving(<EXPECTED CODE>),
+#  which would cause the obvious results, or of any other class,
+#  which would be returned from the send() function.  This would
+#  make everything much simpler and clearer.
+#  It would also mean that almost everything in this module would
+#  need to be recoded.
 #
 ###########################################################
 
@@ -169,6 +212,11 @@ class expect(callback):
 	"""Callback that expects a message with a certain RGTP code number;
 the callback finishes quietly if the first message has that number, and
 throws an exception if it does not."""
+	# FIXME: The expectation is always necessarily 2xx, and people
+	# have to subclass this class if they want to throw custom exceptions
+	# for unexpected results.  Perhaps we should allow a mapping between
+	# error codes and exception classes to be passed in as an extra
+	# parameter to __init__.
 	def __init__(self, expectation):
 		callback.__init__(self)
 		self.desideratum = expectation
@@ -215,11 +263,14 @@ usable in itself."""
 		if message.code()==250:
 			pass # data coming up-- good
 		elif message.code()==-1:
-			self.answer.append(message.text())
+			self.swallow(message.text())
 		elif message.code()==0:
 			self.complete()
 		else:
 			raise RGTPException("Wasn't expecting " + str(message))
+
+	def swallow(self, data):
+		self.answer.append(data)
 
 ###########################################################
 
@@ -498,6 +549,10 @@ class fancy:
 
 		return self.base.send("ITEM "+id, item_reader())
 
+	def item_plain(self, id):
+		"Returns the item with itemid |id|, without any interpretation."
+		return self.base.send("ITEM "+id, stomach())
+
         def raise_access_level(self, target=None, user=None, password=None, tryGuest=0):
 		# Set target==None to get as high as we can with current
 		# credentials.
@@ -557,14 +612,15 @@ class fancy:
 			'replied': maybe_hex(maybe_blank(r[27:35])),
 			'subject': r[36:] }
 
-	def send_data(self, grogname, message):
+	def send_data(self, grogname, message, raw=False):
 		class dumper(multiline):
 
-			def __init__(self, name, data, base):
+			def __init__(self, name, data, base, raw):
                                 multiline.__init__(self)
 				self.name = name
 				self.data = data
 				self.base = base
+				self.raw = raw
 
 			def __call__(self, message):
 				def dot_doubled(line):
@@ -581,9 +637,13 @@ class fancy:
 					# So here goes!
 					self.base.raw_send(
 						dot_doubled(self.name))
-					for paragraph in self.data:
-						for line in wrapping.wrap(paragraph):
+					if raw:
+						for line in self.data:
 							self.base.raw_send(dot_doubled(line))
+					else:
+						for paragraph in self.data:
+							for line in wrapping.wrap(paragraph):
+								self.base.raw_send(dot_doubled(line))
 					# All done!
 					self.base.raw_send('.')
 				elif message.code() in [423, 424, 425]:
@@ -597,7 +657,7 @@ class fancy:
 				else:
 					raise("Wasn't expecting " + str(message))
 
-		self.base.send('DATA', dumper(grogname, message, self.base))
+		self.base.send('DATA', dumper(grogname, message, self.base, raw))
 
 	def post(self, item, subject):
 		"""
@@ -781,12 +841,67 @@ Returns the changes made by an editor to an item.
 		# not much use for it at present, though.
 		self.base.send('MOTS', expect(220))
 
+	def edit(self, itemid, content, digest, reason):
+		"Edits an item."
+
+		class edlk_callback(expect):
+			def __init__(self):
+				expect.__init__(self, 200)
+
+			def __call__(self, message):
+				if message.code()==411:
+					raise RGTPException('Another editor is editing.  Please try again later.')
+				else:
+					expect.__call__(self, message)
+
+		class edit_callback(stomach):
+			def __init__(self):
+				stomach.__init__(self)
+				self.hash = md5.new()
+
+			def swallow(self, data):
+				self.hash.update(data)
+
+			def complete(self):
+				if self.hash.hexdigest()!=digest:
+					raise RGTPException('The item was changed while you were editing it.')
+				stomach.complete(self)
+
+		class edcf_callback(expect):
+			def __init__(self):
+				expect.__init__(self, 220)
+
+			def __call__(self, message):
+				if message.code()==410:
+					raise RGTPException('The item has vanished!')
+				elif message.code() in [423, 424, 425]:
+					# server's not happy with
+					# something we said
+					raise UnacceptableContentError(
+						message.code(),
+						message.text())
+				else:
+					expect.__call__(self, message)
+
+		content = content.split('\n')
+		while content and content[-1] == '': content = content[:-1]
+
+		self.base.send('EDLK', edlk_callback())
+		self.base.send('EDIT '+itemid, edit_callback())
+		if content:
+			self.send_data('', content, True)
+		self.base.send('EDCF '+reason, edcf_callback())
+		self.base.send('EDUL', expect(200))
+
 ################################################################
 
 # need to add fields for:
 # datestamp of last eat()
 class interpreted_index:
-	"bah. explain this. i don't feel like explaining it atm."
+	"""If you pass index lines into the eat() method in
+the form in which they pass across the wire, this class will
+interpret them, and offers many useful accessors for the data
+therein."""
 
 	def __init__(self):
 		self.index = {}
