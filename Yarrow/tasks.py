@@ -1963,6 +1963,7 @@ class edit_handler(handler_ancestor):
 		print '<textarea style="color:red;width: 100%" '+\
 		    'cols="80" rows="20" name="content">'
 		for line in item[1:]:
+			if line.startswith('.'): line = line[1:]
 			print cgi.escape(line)
 		print '</textarea>'
 
