@@ -216,7 +216,20 @@ class yarrow:
 			self.outgoing_cookies['yarrow-session']['path']=self.uri(None,'')
 			self.fly.set_cookies(self.outgoing_cookies)
 
+		# FIXME: Take this from the config file
 		colour = '770000'
+
+		editbutton = ''
+		if self.connection and self.connection.access_level>2:
+			target = None
+			if self.verb=='read':
+				target = self.item+'/edit'
+			elif self.verb=='browse':
+				target = 'edit'
+
+			if target:
+				editbutton = '<link rel="alternate" type="application/x-wiki" title="Edit" href="%s"/>' % (
+					self.uri(target))
 
 		print """
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
@@ -255,7 +268,7 @@ h2 { font-size: 12pt; }
 .invisible { display: none; }
 ul.others { list-style-type: square; font-style: italic; }
 --></style>
-<link rel="shortcut icon" href="/favicon.ico">
+<link rel="shortcut icon" href="/favicon.ico">"""+editbutton+"""
 </head><body><div class="content">
 
 <p><b>To all users:</b> this is the new version of Yarrow, in public beta.  It has been tested for a few hours, but I would love to know (<a href="mailto:thomas@thurman.org.uk">thomas@thurman.org.uk</a>) whether this is working for you, and any bug reports you may have.  A copy of the old version is still running <a href="http://www.chiark.greenend.org.uk/ucgi/~tthurman/yarrow.cgi/groggs/browse">here</a> and <a href="http://groggs.extragalactic.info/cgi-bin/yarrow.cgi/groggs/browse">here</a>, in case this is unusable.</p>
