@@ -22,13 +22,21 @@
 
 import ConfigParser
 import string
+import os
+import sys
 import os.path
 
-# FIXME: This should be taken from the environment.
-# The line below beginning "baseconf" is modified by the installation script
-# to point at your base config file for yarrow. If you need to put that
-# somewhere else, modify this line yourself.
-baseconf = '/service/website/marnanel.org/conf/yarrow.conf'
+if not os.environ.has_key('YARROW_CONF'):
+	print 'Content-Type: text/plain'
+	print
+	print 'You need to set the environment variable YARROW_CONF'
+	print 'to point to the configuration file.  You can put this'
+	print 'in your httpd.conf thus:'
+	print
+	print '    SetEnv YARROW_CONF /etc/yarrow.conf'
+	sys.exit(255)
+
+baseconf = os.environ['YARROW_CONF']
 
 settings = ConfigParser.ConfigParser()
 settings.read(baseconf)
@@ -84,6 +92,7 @@ def server_details(name):
 		'backdoor': value(section, 'backdoor'),
 		'longdesc': longdesc,
 		'metadata': value(section, 'metadata'),
+		'encoding': value(section, 'encoding'),
 		}
 
 def all_known_servers():
