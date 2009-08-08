@@ -83,6 +83,7 @@ def server_details(name):
 		'description': value(section, 'description'),
 		'backdoor': value(section, 'backdoor'),
 		'longdesc': longdesc,
+		'metadata': value(section, 'metadata'),
 		}
 
 def all_known_servers():

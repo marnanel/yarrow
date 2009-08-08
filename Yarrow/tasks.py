@@ -125,7 +125,7 @@ other than GROGGS use only the full network domain.)"""
 							     suffix,
 							     address)
 
-def html_print(message, grogname, author, timestamp, y, seq=None):
+def html_print(message, grogname, author, timestamp, y, seq=None, html=False):
 	"""Prints one of the sections of an item which contains
 	one reply and the banner across the top."""
 	# First: the banner across the top...
@@ -158,15 +158,18 @@ def html_print(message, grogname, author, timestamp, y, seq=None):
 	# And now for some real content.
 
 	print '<p>'
-	for line in message:
-		print linkify(y, line)
-		if y.reformat:
-			if line=='':
-				print '</p><p>'
-		else:
-			# We're not reformatting, so just
-			# break at the ends of lines.
-			print '<br>'
+	if html:
+		print '\n'.join(message)
+	else:
+		for line in message:
+			print linkify(y, line)
+			if y.reformat:
+				if line=='':
+					print '</p><p>'
+			else:
+				# We're not reformatting, so just
+				# break at the ends of lines.
+				print '<br>'
 	print '</p>'
 	if seq:
 		print '<a name="after-%x"></a>' % (seq)
@@ -324,13 +327,6 @@ class handler_ancestor:
 				    return only_when_logged_in()
 			    else:
 				    return need_higher_privilege(want, have)
-		    elif not logged_in:
-			    print '<p>To post or reply, you\'ll need to '+\
-				'<a href="%s">log ' % (y.uri('login', None, 1)) +\
-				'in</a>. Even if '+\
-				'you don\'t want to post, it\'s worth logging in, '+\
-				'because then Yarrow can highlight any unread '+\
-				'gossip for you.</p>'
 
 	    return self
 
@@ -395,6 +391,15 @@ class read_handler(handler_ancestor):
 			self.status = y.connection.stat(y.item)
 			y.title = self.status['subject']
 			self.item = y.connection.item(y.item)
+
+			# FIXME: Factor out common code
+			if self.status['from']:
+				target = self.status['from']
+				y.headlinks['Prev'] = (target, target, '')
+			if self.status['to']:
+				target = self.status['to']
+				y.headlinks['Next'] = (target, target, '')
+
 		except rgtp.RGTPException, r:
 			print http_status_from_exception(r)
 			y.title = str(r)
@@ -409,7 +414,8 @@ class read_handler(handler_ancestor):
 				   i['author'],
 				   i['timestamp'],
 				   y,
-				   i['sequence'])
+				   i['sequence'],
+				   self.html)
 
 	def possibly_link(self, y, title, key, anchor):
 		"""If we have a continuation in direction 'key',
@@ -432,6 +438,33 @@ class read_handler(handler_ancestor):
 
 		if y.user and not y.user.last_sequences.has_key(y.server):
 			y.user.last_sequences[y.server] = {} # Stop errors below...
+
+		# Experimental: If the "metadata" flag is set, strip things
+		# which look like metadata.  (That is, lines at the start
+		# of the item preceded by ampersands.)
+		self.html = 0
+		metadata = config.server_details(y.server)['metadata']
+		if metadata and self.item and self.item[1]:
+			tags = []
+			message = self.item[1]['message']
+
+			while message[0]=='':
+				message = message[1:]
+
+			while message[0].startswith('&'):
+				self.html = 1
+			       	if message[0].startswith('&TAGS'):
+					tags.extend(message[0][6:].split(','))
+				message = message[1:]
+
+			if tags:
+				print '<p><strong>Tags: </strong>'
+				for tag in tags:
+					tag = tag.strip()
+					print '<a href=%s%s>%s</a>' % (metadata, tag, tag)
+				print '</p>'
+
+			self.item[1]['message'] = message
 
 		if self.item:
 			self.possibly_link(y,
@@ -519,7 +552,9 @@ class read_handler(handler_ancestor):
 		
 		print '<ul class="others">'
 
-		if y.connection.access_level>2:
+		if y.connection.access_level<2 and not y.user:
+			print '<li><a href="%s">Log in</a> to reply to this item.</li>' % (y.uri('login'))
+		elif y.connection.access_level>2:
 			print '<li><a href="%s">Edit or withdraw</a> this item.</li>' % (
 				y.uri(y.item + '/edit'))
 
@@ -726,11 +761,22 @@ class browse_handler(handler_ancestor):
 			y.user.last_sequences[y.server] = {}
 
 		if we_should_show_motd(y, sequences):
+			# FIXME: General MOTD-printing function is needed.
+			# Should parse the first line "correctly" (allowing
+			# for the GROGGS bug).
 			html_print(y.connection.motd()[1:],
 				   None,
 				   '',
 				   '',
 				   y)
+
+		if not y.user:
+			print '<p>To post or reply, you\'ll need to '+\
+			    '<a href="%s">log ' % (y.uri('login', None, 1)) +\
+			    'in</a>. Even if '+\
+			    'you don\'t want to post, it\'s worth logging in, '+\
+			    'because then Yarrow can highlight any unread '+\
+			    'gossip for you.</p>'
 
 		################################################################
 		# Work out slice sizes.
@@ -899,13 +945,15 @@ class browse_handler(handler_ancestor):
 		print '<tr><td colspan="%d" align="center">' % (colcount)
 
 		if sliceStart+sliceSize < len(index):
-			print '<a href="%s?skip=%d">&lt;&lt; Earliest</a> |' % (
-				y.uri(),
-				len(index)-sliceSize)
-			
-			print '<a href="%s?skip=%d">&lt; Previous</a> |' % (
-				y.uri(),
-				sliceStart+sliceSize)
+			# FIXME: Factor out common code
+			# FIXME: This needs to be done in head!!
+			q = 'skip=%d' % (len(index)-sliceSize)
+			#y.headlinks['Start'] = ('Earliest', '', q)
+			print '<a href="%s?%s">&lt;&lt; Earliest</a> |' % (y.uri, q)
+
+			q = 'skip=%d' % (sliceStart+sliceSize)
+			#y.headlinks['Prev'] = ('Previous', '', q)
+			print '<a href="%s?%s">&lt; Previous</a> |' % (y.uri, q)
 		
 		print 'Items %d-%d of %d' % (sliceStart+1,
 					      sliceStart+len(keys),
@@ -1979,3 +2027,55 @@ class edit_handler(handler_ancestor):
 	def privilege(self):
 		return 3
 
+class dates_handler(handler_ancestor):
+	# FIXME: This uses item['date'], which is the most recent
+	# date the item was replied to.  We should *really* be
+	# using the date the item was created, but interpreted_index
+	# doesn't store that information (yet).
+	def head(self, y):
+		try:
+			y.collater = cache.index(y.server, y.connection)
+			y.title = y.server + ' calendar'
+		except rgtp.RGTPException, r:
+			print http_status_from_exception(r)
+			y.title = str(r)
+
+	def body(self, y):
+
+		self.years = {}
+		self.calendar = {}
+
+		def consider(itemid, date):
+			(got_year, got_month, got_day) = time.localtime(date)[0:3]
+
+			self.years[got_year] = 1
+
+			if y.dates and y.dates[1]:
+				want_year = int(y.dates[0])
+				want_month = int(y.dates[1])
+				if got_year==want_year and got_month==want_month:
+					g = self.calendar.get(got_day,[])
+					g.append(itemid)
+					self.calendar[got_day] = g
+				pass
+			elif y.dates:
+				want_year = int(y.dates[0])
+				if got_year==want_year:
+					self.calendar[got_month] = self.calendar.get(got_month,0)+1
+			else:
+				self.calendar[got_year] = self.calendar.get(got_year,0)+1
+
+		for itemid in y.collater.keys():
+			item = y.collater.items()[itemid]
+			consider(itemid, item['date'])
+
+		print '<p style="text-align:center">'
+		for year in self.years.keys():
+			print '<a href="%s">%s</a>' % (y.uri(str(year)), year)
+		print '</p>'
+
+		print self.calendar
+
+	def sortkey(self):
+		return 'statusxxx'
+	

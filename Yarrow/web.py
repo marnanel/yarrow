@@ -69,7 +69,13 @@ class yarrow:
 		self.verb = ''
 
 		# URL prefix for static content
+		# FIXME: This should go away
 		self.static_prefix = config.value('web', 'static-prefix')
+
+		# Previous, next, etc links.  Keys should be as defined
+		# in sec.6.12 of the HTML spec.
+		self.headlinks = {'Contents': ('Index', '', ''),
+				  'Appendix': ('Message of the day', 'motd', '')}
 
 		# Cookie time:
 		if os.environ.has_key('HTTP_COOKIE'):
@@ -268,7 +274,17 @@ h2 { font-size: 12pt; }
 .invisible { display: none; }
 ul.others { list-style-type: square; font-style: italic; }
 --></style>
-<link rel="shortcut icon" href="/favicon.ico">"""+editbutton+"""
+<link rel="shortcut icon" href="/favicon.ico">"""
+
+		print editbutton
+		for link in self.headlinks.keys():
+			print '<link rel="%s" title="%s" href="%s%s">' % (
+				link,
+				self.headlinks[link][0],
+				self.uri(self.headlinks[link][1]),
+				self.headlinks[link][2])
+
+		print """
 </head><body><div class="content">
 
 <p><b>To all users:</b> this is the new version of Yarrow, in public beta.  It has been tested for a few hours, but I would love to know (<a href="mailto:thomas@thurman.org.uk">thomas@thurman.org.uk</a>) whether this is working for you, and any bug reports you may have.  A copy of the old version is still running <a href="http://www.chiark.greenend.org.uk/ucgi/~tthurman/yarrow.cgi/groggs/browse">here</a> and <a href="http://groggs.extragalactic.info/cgi-bin/yarrow.cgi/groggs/browse">here</a>, in case this is unusable.</p>
@@ -531,6 +547,11 @@ ul.others { list-style-type: square; font-style: italic; }
 				self.verb = 'read' # implicit for items
 			else:
 				self.verb = 'browse'
+
+		self.dates = re.findall('(\d\d\d\d)(?:-(\d\d))?', self.verb)
+		if self.dates:
+			self.dates = self.dates[0]
+			self.verb = 'dates'
 
 	def begin_tasks(self):
 		"""Starts working on a task as soon as we know what it is,
