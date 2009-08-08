@@ -443,7 +443,7 @@ class read_handler(handler_ancestor):
 		# which look like metadata.  (That is, lines at the start
 		# of the item preceded by ampersands.)
 		self.html = 0
-		metadata = config.server_details(y.server).has_key('metadata')
+		metadata = config.server_details(y.server)['metadata']
 		if metadata and self.item and self.item[1]:
 			tags = []
 			message = self.item[1]['message']
@@ -459,9 +459,10 @@ class read_handler(handler_ancestor):
 
 			if tags:
 				print '<p><strong>Tags: </strong>'
+				tags = [t.strip() for t in tags]
+				tags.sort()
 				for tag in tags:
-					tag = tag.strip()
-					print '<a href=%s%s>%s</a>' % (metadata, tag, tag)
+					print '<a href="%s%s">%s</a>' % (metadata, tag, tag)
 				print '</p>'
 
 			self.item[1]['message'] = message
@@ -2040,7 +2041,14 @@ class dates_handler(handler_ancestor):
 			print http_status_from_exception(r)
 			y.title = str(r)
 
+
 	def body(self, y):
+
+		def posts(count):
+			if count==1:
+				return '1 post'
+			else:
+				return '%d posts' % (count)
 
 		self.years = {}
 		self.calendar = {}
@@ -2074,7 +2082,34 @@ class dates_handler(handler_ancestor):
 			print '<a href="%s">%s</a>' % (y.uri(str(year)), year)
 		print '</p>'
 
-		print self.calendar
+		print '<dl>'
+		if y.dates and y.dates[1]:
+			year = y.dates[0]
+		        month = y.dates[1]
+			i = y.collater.items()
+			for day in self.calendar:
+				print '<dt>%s</dt><dd><ul>' % (
+					time.strftime("%d %B %Y", (int(year), int(month), int(day),
+								   0, 0, 0, 0, 0, 0)))
+				for item in self.calendar[day]:
+					print '<li><a href="%s">%s</a></li>' % (
+						y.uri(item),
+						i[item]['subject'])
+				print '</ul></dd>'
+		elif y.dates:
+			year = y.dates[0]
+			for month in self.calendar:
+				print '<dt>%s</dt><dd><a href="%s">%s</a></dd>' % (
+					time.strftime("%B %Y", (int(year), int(month), 1,
+								0, 0, 0, 0, 0, 0)),
+					y.uri('%04d-%02d' % (int(year), int(month))),
+					posts(self.calendar[month]))
+		else:
+			for year in self.calendar:
+				print '<dt>%s</dt><dd><a href="%s">%s</a></dd>' % (
+					year, y.uri(str(year)),
+					posts(self.calendar[year]))
+		print '</dl>'
 
 	def sortkey(self):
 		return 'statusxxx'
