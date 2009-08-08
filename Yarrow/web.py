@@ -184,7 +184,8 @@ class yarrow:
 			self.server_details = server
 			self.connection = rgtp.fancy(server['host'],
 						     server['port'],
-						     self.log)
+						     self.log,
+						     server['encoding'])
 
                         if self.verb in ['newbie']:
                                 # Some verbs must not have a connection
@@ -241,6 +242,7 @@ class yarrow:
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
 "http://www.w3.org/TR/html4/loose.dtd">
 <head><title>""" + self.title + """</title>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" >
 <style type="text/css"><!--
 body {
   margin: 0px; font-size: 12px;
