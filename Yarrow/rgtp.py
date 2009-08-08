@@ -277,7 +277,7 @@ usable in itself."""
 class base:
 	"Basic RGTP handling."
 
-	def __init__(self, host, port, cback, logging=1, encoding='iso-8859-1'):
+	def __init__(self, host, port, cback, logging=1, encoding=None):
 		self.logging=logging
 		self.log=''
 		self.state = 0
@@ -286,6 +286,7 @@ class base:
 		self.incoming = sock.makefile("r")
 		self.outgoing = sock.makefile("w")
 		self.encoding = encoding
+		if not self.encoding: self.encoding='iso-8859-1'
 		self._get_line(cback)
 
 	def _get_line(self, cback):
@@ -312,8 +313,11 @@ class base:
 
 	def receive(self):
 		temp = string.rstrip(self.incoming.readline())
-		# FIXME: Removing this line makes it work.  Why?  It should be vital!
-		#temp = temp.decode(self.encoding).encode('utf-8')
+		if self.encoding=='utf-8':
+			# FIXME:  I don't understand why this is back to front
+			temp = temp.decode('utf-8').encode('iso-8859-1')
+		else:
+			temp = temp.decode('iso-8859-1').encode('utf-8')
 		if self.logging: self.log = self.log + "\n<" +temp
 		return temp
 
@@ -341,7 +345,8 @@ class fancy:
 	def __init__(self,
 		     host='rgtp-serv.groggs.group.cam.ac.uk',
 		     port=1431,
-		     logging=0):
+		     logging=0,
+		     encoding='iso-8859-1'):
 
 		class first_connect(callback):
 			access_level = 0
@@ -349,7 +354,7 @@ class fancy:
 				self.access_level = message.code()-230
 
 		towel = first_connect()
-		self.base = base(host, port, towel, logging)
+		self.base = base(host, port, towel, logging, encoding)
 		self.access_level = towel.access_level
 
 	def login(self, email, sharedsecret = None):
