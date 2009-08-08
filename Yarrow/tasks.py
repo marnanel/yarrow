@@ -443,7 +443,7 @@ class read_handler(handler_ancestor):
 		# which look like metadata.  (That is, lines at the start
 		# of the item preceded by ampersands.)
 		self.html = 0
-		metadata = config.server_details(y.server)['metadata']
+		metadata = config.server_details(y.server).has_key('metadata')
 		if metadata and self.item and self.item[1]:
 			tags = []
 			message = self.item[1]['message']
