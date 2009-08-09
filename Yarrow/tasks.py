@@ -2120,7 +2120,9 @@ class dates_handler(handler_ancestor):
 		print '<dl>'
 		if year and month:
 			i = y.collater.items()
-			for day in self.calendar:
+			k = self.calendar.keys()
+			k.sort()
+			for day in k:
 				print '<dt>%s</dt><dd><ul>' % (
 					time.strftime("%e %B %Y", (int(year), int(month), int(day),
 								   0, 0, 0, 0, 0, 0)))
