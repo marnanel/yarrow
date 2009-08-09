@@ -175,9 +175,9 @@ class yarrow:
 			print '<input type="hidden" name="sequence" value="%x">' % (sequence)
 		print '<input type="submit" value=" Gossip "></form>'
 
-	def meta_field(self, field, default):
+	def meta_field(self, field, default=None):
 		if self.user:
-			return self.user.state(y.server, field, None)
+			return self.user.state(self.server, field, None)
 		return default
 
 	def connect(self):
@@ -212,8 +212,8 @@ class yarrow:
 				if self.user:
 					self.connection.raise_access_level(
 						None,
-						meta_field(self, 'userid'),
-						meta_field(self, 'secret'),
+						self.meta_field('userid'),
+						self.meta_field('secret'),
 						1)
 				else:
 					self.connection.raise_access_level()
