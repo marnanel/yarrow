@@ -182,7 +182,7 @@ class yarrow:
 
 	def connect(self):
 
-		if self.server!='':
+		if self.server:
 			try:
 				server = config.server_details(self.server)
 			except Exception, e:
@@ -307,7 +307,7 @@ ul.others { list-style-type: square; font-style: italic; }
 		self.maybe_print_logs()
 
 		print '</div><div class="menu">'
-		if self.server!='':
+		if self.server:
 
 			if not self.single:
 				print '<h1>%s</h1>' % (self.server)
