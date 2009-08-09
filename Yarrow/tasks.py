@@ -31,6 +31,7 @@ import config
 import random
 import os
 import md5
+import metadata
 
 ################################################################
 #
@@ -464,7 +465,7 @@ class read_handler(handler_ancestor):
 				tags = [t.strip() for t in tags]
 				tags.sort()
 				for tag in tags:
-					print '<a href="%s%s">%s</a>' % (metadata, tag, tag)
+					print '<a href="%s">%s</a>' % (y.uri('tag/'+tag), tag)
 				print '</p>'
 
 			self.item[1]['message'] = message
@@ -715,6 +716,8 @@ class browse_handler(handler_ancestor):
         "An overview of the gossip on this server."
 	def head(self, y):
 		try:
+			# FIXME I don't at all like this way of writing
+			# into another object!
 			y.collater = cache.index(y.server, y.connection)
 			y.title = y.server + ' index'
 		except rgtp.RGTPException, r:
@@ -2130,3 +2133,94 @@ class dates_handler(handler_ancestor):
 
 	def title(self):
 		return None
+
+################################################################
+
+class metadata_ancestor(handler_ancestor):
+	def get_metadata(self, y):
+		self.collated = cache.index(y.server, y.connection).items()
+		self.metadata = metadata.get(y.server, self.collated, y.connection)
+	def title(self):
+		return None
+
+################################################################
+
+class tag_handler(metadata_ancestor):
+	"Sets of related items."
+	def head(self, y):
+		self.get_metadata(y)
+
+		if y.params:
+			y.title = y.params[0].title()
+		else:
+			y.title = 'Tags'
+
+	def body(self, y):
+		if not y.server_details['metadata']:
+			print '<h1>No tags</h1>'
+			print '<p>%s has no metadata, and therefore no tags.</p>' % (
+				y.server.title())
+			return
+
+		# FIXME: a way of returning the tag cloud in JSON
+		# would be really useful.  (Though that would be
+		# moving towards what we'd need for templates, anyway.)
+		if y.params:
+			self.show_tag(y, y.params[0])
+		else:
+			self.show_cloud(y)
+
+	def show_tag(self, y, tag):
+
+		if not self.metadata.tags.has_key(tag):
+			print '<h1>No such tag</h1>'
+			print '<p>That is not a defined tag.  Would you like'
+			print 'to see <a href="%s">all the tags in use</a>?' % (y.uri('tag'))
+			return
+
+		print '<h1>%s</h1><ul>' % (tag.title())
+		i = self.collated
+		for itemid in self.metadata.tags[tag]:
+			print '<li>%s: <a href="%s">%s</a></li>' % (
+				time.strftime('%A %e %B %Y', time.localtime(i[itemid]['started'])),
+				y.uri(itemid),
+				i[itemid]['subject'])
+		print '</ul>'
+
+	def show_cloud(self, y):
+		print '<h1>Tags</h1>'
+
+		maxuse = 0
+
+		for tag in self.metadata.tags:
+			maxuse = max(maxuse, len(self.metadata.tags[tag]))
+
+		maxuse = float(maxuse)
+		print '<p>'
+		tags = self.metadata.tags.keys()
+		tags.sort()
+		for tag in tags:
+			print '<a href="%s" style="font-size: %d%%;text-decoration:none">%s</a>' % (
+				y.uri('tag/'+tag),
+				100+300.0*(float(len(self.metadata.tags[tag]))/maxuse),
+				tag)
+		print '</p>'
+
+################################################################
+
+class slug_handler(metadata_ancestor):
+        "Jump to some gossip by name."
+	# In case you're wondering, this is designed for people
+	# moving to Yarrow from other systems and not wanting
+	# to break their existing URLs.
+	def head(self, y):
+		self.get_metadata(y)
+		if len(y.params) and self.metadata.slugs.has_key(y.params[0]):
+			target = self.metadata.slugs[y.params[0]]
+			y.fly.set_header('Status', '301 Slug')
+			y.fly.set_header('Location', y.uri(target))
+			y.fly.send_only_headers()
+
+	def body(self, y):
+		# if you got here...
+		print "That is not a known slug."

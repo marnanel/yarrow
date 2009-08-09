@@ -432,7 +432,15 @@ ul.others { list-style-type: square; font-style: italic; }
 		if not self.connection or not self.connection.base.logging:
 			return
 		print '<h1>Log</h1><pre>'
-		for anything in string.split(self.connection.base.log,'\n'):
+
+		logs = string.split(self.connection.base.log,'\n')
+
+		if len(logs)>200:
+			print '<p>The logs are extremely long; we are only showing you'
+			print 'the last 200 lines.</p>'
+			logs = logs[-200:]
+
+		for anything in logs:
 			if not anything or anything=='':
 				pass
 			elif anything[0]=='<':
@@ -507,7 +515,7 @@ ul.others { list-style-type: square; font-style: italic; }
 					continue
 				elif self.server=='':
 					self.server=thing
-				elif self.item=='' and len(thing)==8:
+				elif self.item=='' and len(thing)==8 and not self.verb:
 					self.item=thing
 				elif self.verb=='':
 					self.verb=thing
