@@ -2146,12 +2146,15 @@ class metadata_ancestor(handler_ancestor):
 class tag_handler(metadata_ancestor):
 	"Sets of related items."
 	def head(self, y):
-		self.get_metadata(y)
+		if y.server_details['metadata']:
+			self.get_metadata(y)
 
-		if y.params:
-			y.title = y.params[0].title()
+			if y.params and self.metadata.tags.has_key(y.params[0]):
+				y.title = y.params[0].title()
+			else:
+				y.title = 'Tags'
 		else:
-			y.title = 'Tags'
+			y.title = 'No tags'
 
 	def body(self, y):
 		if not y.server_details['metadata']:
@@ -2183,7 +2186,8 @@ class tag_handler(metadata_ancestor):
 				time.strftime('%A %e %B %Y', time.localtime(i[itemid]['started'])),
 				y.uri(itemid),
 				i[itemid]['subject'])
-		print '</ul>'
+		print '</ul><ul class="others"><li>See <a href="%s">all the tags in use</a>.</li></ul>' % (
+			y.uri('tag'))
 
 	def show_cloud(self, y):
 		print '<h1>Tags</h1>'
@@ -2200,6 +2204,7 @@ class tag_handler(metadata_ancestor):
 		for tag in tags:
 			print '<a href="%s" style="font-size: %d%%;text-decoration:none">%s</a>' % (
 				y.uri('tag/'+tag),
+				# TODO: Sizing probably better if logarithmic
 				100+300.0*(float(len(self.metadata.tags[tag]))/maxuse),
 				tag)
 		print '</p>'
