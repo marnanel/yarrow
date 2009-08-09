@@ -911,7 +911,7 @@ therein."""
 	def __init__(self):
 		self.index = {}
 		self.last_sequences = { 'all': -1 }
-		self.version = 1
+		self.version = 2
 		self.c_line = None
 
 	def eat(self, lines):
@@ -926,6 +926,7 @@ therein."""
 					self.index[line[2]] = {'date': 0,
 							       'count': 0,
 							       'subject': 'Unknown',
+							       'started': int(line[1], 16),
 							       'live': 1 }
 					self.last_sequences[line[2]] = -1
 
