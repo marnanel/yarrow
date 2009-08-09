@@ -536,6 +536,7 @@ ul.others { list-style-type: square; font-style: italic; }
 			self.outgoing_cookies[yarrow_return]['expires'] = one_day
 
 		# Pick up config settings for this server.
+		# XXX This has been replaced with meta_field; remove it!
 		pickup = {
 			'reformat': 1,
 			'log': 0,
