@@ -40,14 +40,23 @@ def index(name, rgtp_server):
 
 	current = None
 
-	# FIXME: If reading the indexes file causes an exception,
-	# we should just assume we have no cache.
 	if indexes.has_key(name):
-		# AND the version is current
 		# AND the datestamp is recent
-		current = indexes[name]
-		current.eat(rgtp_server.index(current.sequences()['all']+1))
-	else:
+		try:
+			current = indexes[name]
+
+			if current.version<2:
+				# too old
+				# FIXME: we should get the version to check against
+				# from the rgtp module, not hard-code it.
+				current = None
+			else:
+				current.eat(rgtp_server.index(current.sequences()['all']+1))
+		except:
+			# didn't work; just reload
+			current = None
+
+	if not current:
 		current = rgtp.interpreted_index()
 		current.eat(rgtp_server.index())
 
