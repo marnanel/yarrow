@@ -298,7 +298,7 @@ ul.others { list-style-type: square; font-style: italic; }
 <link rel="shortcut icon" href="/favicon.ico">"""
 
 		print editbutton
-		if self.connection.base_access_level!=0:
+		if self.connection and self.connection.base_access_level!=0:
 			print '<link rel="alternate" type="application/rss+xml" title="RSS" href="%s">' % (
 				self.uri('feed'))
 		for link in self.headlinks.keys():
