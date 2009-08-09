@@ -337,6 +337,8 @@ ul.others { list-style-type: square; font-style: italic; }
 					keypress = re.findall(regexp, title)[0]
 					title = re.sub(regexp, '<u>'+keypress+'</u>', title)
 					keyelement = 'accesskey="%s"' % (keypress.upper())
+				else:
+					title = title.replace('_', '')
 				
 				print '<a href="%s"%s title="%s">%s</a><br/><br/>' % (
 					y.uri(name),
