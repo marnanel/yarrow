@@ -2253,7 +2253,7 @@ class slug_handler(metadata_ancestor):
 
 ################################################################
 
-class feed_handler(handler_ancestor):
+class feed_handler(tagreader_ancestor):
 	"An RSS feed."
 
 	# This is linked in the header if the server gives out
@@ -2295,15 +2295,26 @@ class feed_handler(handler_ancestor):
 		i = self.collater.items()
 
 		for itemid in self.collater.keys()[:7]:
+			content = y.connection.item(itemid)
+			if y.server_details['metadata']:
+				(html, tags, content) = self.split_tags(y, content[1]['message'])
+			else:
+				html = 0
+				tags = []
+				content = content[1]['message']
+			content = ' '.join(content)
+
 			print '<item>'
 			print '<title>%s</title>' % (i[itemid])['subject']
 			uri = 'http://%s%s' % (server_name, y.uri(itemid))
 			print '<guid isPermaLink="true">%s</guid>' % (uri)
 		        #<pubDate>Sat, 08 Aug 2009 19:11:42 GMT</pubDate>
 			print '<link>%s</link>' % (uri)
-			print '<description>CONTENT</description>'
+			print '<description>%s</description>' % (
+				cgi.escape(content))
+			for tag in tags:
+				print '<category>%s</category>' % (tag)
 			print '<comments>%s</comments>' % (uri)
-			# categories
 			print '</item>'
 
 
