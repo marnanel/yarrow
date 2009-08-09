@@ -2127,7 +2127,7 @@ class dates_handler(handler_ancestor):
 				for item in self.calendar[day]:
 					print '<li><a href="%s">%s</a></li>' % (
 						y.uri(item),
-						i[item]['subject'])
+						cgi.escape(i[item]['subject']))
 				print '</ul></dd>'
 		elif year:
 			for month in self.calendar:
@@ -2193,13 +2193,13 @@ class tag_handler(metadata_ancestor):
 			print 'to see <a href="%s">all the tags in use</a>?' % (y.uri('tag'))
 			return
 
-		print '<h1>%s</h1><ul>' % (tag.title())
+		print '<h1>%s</h1><ul>' % (cgi.escape(tag.title()))
 		i = self.collated
 		for itemid in self.metadata.tags[tag]:
 			print '<li>%s: <a href="%s">%s</a></li>' % (
 				time.strftime('%A %e %B %Y', time.localtime(i[itemid]['started'])),
 				y.uri(itemid),
-				i[itemid]['subject'])
+				cgi.escape(i[itemid]['subject']))
 		print '</ul><ul class="others"><li>See <a href="%s">all the tags in use</a>.</li></ul>' % (
 			y.uri('tag'))
 
@@ -2220,7 +2220,7 @@ class tag_handler(metadata_ancestor):
 				y.uri('tag/'+tag),
 				# TODO: Sizing probably better if logarithmic
 				100+300.0*(float(len(self.metadata.tags[tag]))/maxuse),
-				tag)
+				cgi.escape(tag))
 		print '</p>'
 
 ################################################################
@@ -2253,6 +2253,10 @@ class feed_handler(handler_ancestor):
 	# to it if you're logged in to a more restricted server,
 	# but it'll be little use to you because you can't
 	# show it to your RSS reader.
+
+	# FIXME: We will want to restrict by tag.
+	# (Over the most recent "n"? or the most "n" recent members
+	# of the category?  The latter will need metadata support)
 
 	def title(self):
 		return None
