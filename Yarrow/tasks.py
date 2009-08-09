@@ -469,6 +469,7 @@ class read_handler(tagreader_ancestor):
 		# Experimental: If the "metadata" flag is set, strip things
 		# which look like metadata.  (That is, lines at the start
 		# of the item preceded by ampersands.)
+		self.html = 0
 		if config.server_details(y.server)['metadata'] and self.item and self.item[1]:
 			(self.html, tags, self.item[1]['message']) = self.split_tags(y, self.item[1]['message'])
 
