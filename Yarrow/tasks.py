@@ -1710,6 +1710,12 @@ class serverlist_handler(handler_ancestor):
 		y.title = 'Choose an RGTP server'
 
 	def body(self, y):
+		
+		if y.single:
+			print '<p>There is <a href="%s">one server</a> available.</p>' % (
+				y.uri(''))
+			return
+
 		print '<h1>First off, choose yourself a server.</h1><dl>'
 
 		servers = config.all_known_servers()
