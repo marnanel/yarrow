@@ -2241,6 +2241,9 @@ class slug_handler(metadata_ancestor):
 	# moving to Yarrow from other systems and not wanting
 	# to break their existing URLs.
 	def head(self, y):
+		if not y.server_details['metadata']:
+			return
+
 		self.get_metadata(y)
 		if len(y.params) and self.metadata.slugs.has_key(y.params[0]):
 			target = self.metadata.slugs[y.params[0]]
@@ -2254,7 +2257,7 @@ class slug_handler(metadata_ancestor):
 
 ################################################################
 
-class feed_handler(tagreader_ancestor):
+class feed_handler(tagreader_ancestor, metadata_ancestor):
 	"An RSS feed."
 
 	# This is linked in the header if the server gives out
@@ -2276,6 +2279,14 @@ class feed_handler(tagreader_ancestor):
 
 	def head(self, y):
 		self.collater = cache.index(y.server, y.connection)
+		self.items = None
+		if y.server_details['metadata'] and y.params:
+			self.get_metadata(y)
+			if self.metadata.tags.has_key(y.params[0]):
+				self.items = self.metadata.tags[y.params[0]]
+
+		if not self.items:
+			self.items = self.collater.items().keys()
 
 	def body(self, y):
 		server_name = os.environ['SERVER_NAME']
@@ -2295,7 +2306,9 @@ class feed_handler(tagreader_ancestor):
 
 		i = self.collater.items()
 
-		for itemid in self.collater.keys()[:7]:
+		# FIXME: Sort "i" by started date
+
+		for itemid in self.items[:7]:
 			content = y.connection.item(itemid)
 			if y.server_details['metadata']:
 				(html, tags, content) = self.split_tags(y, content[1]['message'])
