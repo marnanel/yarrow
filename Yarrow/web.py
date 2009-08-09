@@ -232,6 +232,12 @@ class yarrow:
 			self.outgoing_cookies['yarrow-session']['path']=self.uri(None,'')
 			self.fly.set_cookies(self.outgoing_cookies)
 
+		mimetype = self.verb_handler.mimetype()
+		self.fly.set_header('Content-Type', mimetype)
+		if not 'html' in mimetype:
+			self.no_chrome = 1
+			return
+
 		# FIXME: Take this from the config file
 		colour = '770000'
 
@@ -250,8 +256,8 @@ class yarrow:
 		print """
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
 "http://www.w3.org/TR/html4/loose.dtd">
-<head><title>""" + self.title + """</title>
-<meta http-equiv="Content-Type" content="text/html;charset=utf-8" >
+<head><title>""" + self.title + '</title><meta http-equiv="Content-Type" content="'+\
+		    mimetype+'"'+""">
 <style type="text/css"><!--
 body {
   margin: 0px; font-size: 12px;
@@ -288,6 +294,9 @@ ul.others { list-style-type: square; font-style: italic; }
 <link rel="shortcut icon" href="/favicon.ico">"""
 
 		print editbutton
+		if self.connection.base_access_level!=0:
+			print '<link rel="alternate" type="application/rss+xml" title="RSS" href="%s">' % (
+				self.uri('rss'))
 		for link in self.headlinks.keys():
 			print '<link rel="%s" title="%s" href="%s%s">' % (
 				link,
@@ -303,6 +312,9 @@ ul.others { list-style-type: square; font-style: italic; }
 
 	def print_footers(self):
 		# The sidebar and so on.
+
+		if self.no_chrome:
+			return
 
 		self.maybe_print_logs()
 

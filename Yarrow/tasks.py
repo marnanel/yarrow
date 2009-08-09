@@ -333,6 +333,9 @@ class handler_ancestor:
 
 	    return self
 
+    def mimetype(self):
+	    return 'text/html; charset=utf-8'
+
 ################################################################
 
 class privilege_error(handler_ancestor):
@@ -836,7 +839,7 @@ class browse_handler(handler_ancestor):
 					js_family.append("'%s'" % (string.join(family,' ')))
 		del scanned
 		
-		print '<script><!--'
+		print '<script type="text/javascript"><!--'
 		print "var m = [%s];" % (string.join(js_family,",\n"))
 		print 'function b(i, c) { document.getElementById(i).setAttribute("class",c); }'
 		print 'function g(f, i, c) { for (var k in f) { if (f[k]!=i) b(f[k], c); } }'
@@ -1543,7 +1546,12 @@ some gossip</a> now.</p>""" % (y.uri())
 
 ################################################################
 
-class unknown_command:
+class error_ancestor(handler_ancestor):
+	def allowed(self):
+		return self
+
+################################################################
+class unknown_command(error_ancestor):
 	def head(self, y):
 		y.title = "Unknown command - " + y.verb
 		# This is quite legitimately 404-- since pages are
@@ -1559,7 +1567,7 @@ class unknown_command:
 
 ################################################################
 
-class unknown_server_login:
+class unknown_server_login(error_ancestor):
 	def head(self, y):
 		y.title = "Unknown server - " + y.server
 		y.fly.set_header('Status','404 Unknown server')
@@ -1572,7 +1580,7 @@ class unknown_server_login:
 
 ################################################################
 
-class failed_login:
+class failed_login(error_ancestor):
 	def head(self, y):
 		y.title = "Login failed!"
 
@@ -1582,7 +1590,7 @@ class failed_login:
 
 ################################################################
 
-class rgtp_error_login:
+class rgtp_error_login(error_ancestor):
 	def head(self, y):
 		y.title = y.logging_in_details
 
@@ -2233,3 +2241,15 @@ class slug_handler(metadata_ancestor):
 	def body(self, y):
 		# if you got here...
 		print "That is not a known slug."
+
+################################################################
+
+class rss_handler(handler_ancestor):
+	def mimetype(self):
+		return 'text/plain'
+
+	def head(self, y):
+		pass
+
+	def body(self, y):
+		print 'What?'

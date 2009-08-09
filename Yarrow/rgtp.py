@@ -355,7 +355,7 @@ class fancy:
 
 		towel = first_connect()
 		self.base = base(host, port, towel, logging, encoding)
-		self.access_level = towel.access_level
+		self.access_level = self.base_access_level = towel.access_level
 
 	def login(self, email, sharedsecret = None):
 
