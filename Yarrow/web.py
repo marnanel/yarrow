@@ -68,6 +68,9 @@ class yarrow:
 		# What they want us to do.
 		self.verb = ''
 
+		# Some more parameters for the verb.
+		self.params = []
+
 		# URL prefix for static content
 		# FIXME: This should go away
 		self.static_prefix = config.value('web', 'static-prefix')
@@ -251,7 +254,7 @@ body {
 td { vertical-align: top; font-size: 10px; }
 th { background-color: #"""+colour+"""; text-align: left; color: #FFFFFF;
   vertical-align: middle; font-size: 12px; }
-.reply, .reply a { background-color: #"""+colour+"""; color: #FFFFFF; }
+.reply, .reply a, .reply a:visited { background-color: #"""+colour+"""; color: #FFFFFF; }
 .reply td { text-align: right; }
 .menu {
   position: absolute; left:auto; bottom:auto; top: 0; right: 0;
@@ -509,7 +512,7 @@ ul.others { list-style-type: square; font-style: italic; }
 				elif self.verb=='':
 					self.verb=thing
 				else:
-					raise rgtp.RGTPException("what's " + thing + " good for?")
+					self.params.append(thing)
 
 		if self.incoming_cookies.has_key('yarrow-session'):
 			self.user = user.from_session_key(self.incoming_cookies['yarrow-session'].value)
@@ -550,9 +553,8 @@ ul.others { list-style-type: square; font-style: italic; }
 			else:
 				self.verb = 'browse'
 
-		self.dates = re.findall('(\d\d\d\d)(?:-(\d\d))?', self.verb)
-		if self.dates:
-			self.dates = self.dates[0]
+		if re.findall('\d\d\d\d', self.verb):
+			self.params.insert(0, self.verb)
 			self.verb = 'dates'
 
 	def begin_tasks(self):

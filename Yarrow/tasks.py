@@ -131,9 +131,11 @@ def html_print(message, grogname, author, timestamp, y, seq=None, html=False):
 	# First: the banner across the top...
 
 	if timestamp:
+		timestamp = time.localtime(timestamp)
 		timestamp = time.strftime(
-			"%a %d %b %Y %I:%M:%S%P",
-			time.localtime(timestamp))
+			'%a %d <a href="%%s">%b</a> <a href="%%s">%Y</a> %I:%M:%S%P',
+			timestamp) % (y.uri('%04d/%02d' % (timestamp[0], timestamp[1])),
+				      y.uri('%04d' % (timestamp[0])))
 	else:
 		timestamp = ''
 
@@ -950,11 +952,11 @@ class browse_handler(handler_ancestor):
 			# FIXME: This needs to be done in head!!
 			q = 'skip=%d' % (len(index)-sliceSize)
 			#y.headlinks['Start'] = ('Earliest', '', q)
-			print '<a href="%s?%s">&lt;&lt; Earliest</a> |' % (y.uri, q)
+			print '<a href="%s?%s">&lt;&lt; Earliest</a> |' % (y.uri(), q)
 
 			q = 'skip=%d' % (sliceStart+sliceSize)
 			#y.headlinks['Prev'] = ('Previous', '', q)
-			print '<a href="%s?%s">&lt; Previous</a> |' % (y.uri, q)
+			print '<a href="%s?%s">&lt; Previous</a> |' % (y.uri(), q)
 		
 		print 'Items %d-%d of %d' % (sliceStart+1,
 					      sliceStart+len(keys),
@@ -2029,10 +2031,6 @@ class edit_handler(handler_ancestor):
 		return 3
 
 class dates_handler(handler_ancestor):
-	# FIXME: This uses item['date'], which is the most recent
-	# date the item was replied to.  We should *really* be
-	# using the date the item was created, but interpreted_index
-	# doesn't store that information (yet).
 	def head(self, y):
 		try:
 			y.collater = cache.index(y.server, y.connection)
@@ -2051,6 +2049,7 @@ class dates_handler(handler_ancestor):
 				return '%d posts' % (count)
 
 		self.years = {}
+		self.months = {}
 		self.calendar = {}
 
 		def consider(itemid, date):
@@ -2058,51 +2057,69 @@ class dates_handler(handler_ancestor):
 
 			self.years[got_year] = 1
 
-			if y.dates and y.dates[1]:
-				want_year = int(y.dates[0])
-				want_month = int(y.dates[1])
-				if got_year==want_year and got_month==want_month:
-					g = self.calendar.get(got_day,[])
-					g.append(itemid)
-					self.calendar[got_day] = g
-				pass
-			elif y.dates:
-				want_year = int(y.dates[0])
+			if len(y.params)>1:
+				want_year = int(y.params[0])
+				want_month = int(y.params[1])
 				if got_year==want_year:
+					self.months[got_month] = 1
+					if got_month==want_month:
+						g = self.calendar.get(got_day,[])
+						g.append(itemid)
+						self.calendar[got_day] = g
+			elif len(y.params)>0:
+				# just the year
+				want_year = int(y.params[0])
+				if got_year==want_year:
+					self.months[got_month] = 1
 					self.calendar[got_month] = self.calendar.get(got_month,0)+1
 			else:
 				self.calendar[got_year] = self.calendar.get(got_year,0)+1
 
 		for itemid in y.collater.keys():
 			item = y.collater.items()[itemid]
-			consider(itemid, item['date'])
+			consider(itemid, item['started'])
+
+		year = None
+		month = None
+		if len(y.params)>0: year = y.params[0]
+		if len(y.params)>1: month = y.params[1]
 
 		print '<p style="text-align:center">'
-		for year in self.years.keys():
-			print '<a href="%s">%s</a>' % (y.uri(str(year)), year)
+		for yy in self.years.keys():
+			if str(yy)==year:
+				print '<b>%s</b>' % (yy)
+			else:
+				print '<a href="%s">%s</a>' % (y.uri(str(yy)), yy)
+		if self.months:
+			print '<br>'
+			for mm in self.months.keys():
+				name = time.strftime('%B', (int(year), mm, 1, 0, 0, 0, 0, 0, 0))
+				if month and int(month)==mm:
+					print '<b>%s</b>' % (name)
+				else:
+					print '<a href="%s/%02d">%s</a>' % (
+						year, mm, name)
 		print '</p>'
 
+
 		print '<dl>'
-		if y.dates and y.dates[1]:
-			year = y.dates[0]
-		        month = y.dates[1]
+		if year and month:
 			i = y.collater.items()
 			for day in self.calendar:
 				print '<dt>%s</dt><dd><ul>' % (
-					time.strftime("%d %B %Y", (int(year), int(month), int(day),
+					time.strftime("%e %B %Y", (int(year), int(month), int(day),
 								   0, 0, 0, 0, 0, 0)))
 				for item in self.calendar[day]:
 					print '<li><a href="%s">%s</a></li>' % (
 						y.uri(item),
 						i[item]['subject'])
 				print '</ul></dd>'
-		elif y.dates:
-			year = y.dates[0]
+		elif year:
 			for month in self.calendar:
 				print '<dt>%s</dt><dd><a href="%s">%s</a></dd>' % (
 					time.strftime("%B %Y", (int(year), int(month), 1,
 								0, 0, 0, 0, 0, 0)),
-					y.uri('%04d-%02d' % (int(year), int(month))),
+					y.uri('%04d/%02d' % (int(year), int(month))),
 					posts(self.calendar[month]))
 		else:
 			for year in self.calendar:
@@ -2111,6 +2128,5 @@ class dates_handler(handler_ancestor):
 					posts(self.calendar[year]))
 		print '</dl>'
 
-	def sortkey(self):
-		return 'statusxxx'
-	
+	def title(self):
+		return None
