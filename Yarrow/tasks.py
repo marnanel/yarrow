@@ -2305,10 +2305,12 @@ class feed_handler(tagreader_ancestor):
 			content = ' '.join(content)
 
 			print '<item>'
-			print '<title>%s</title>' % (i[itemid])['subject']
+			print '<title>%s</title>' % (i[itemid]['subject'])
 			uri = 'http://%s%s' % (server_name, y.uri(itemid))
 			print '<guid isPermaLink="true">%s</guid>' % (uri)
-		        #<pubDate>Sat, 08 Aug 2009 19:11:42 GMT</pubDate>
+			print '<pubDate>%s</pubDate>' % (
+				time.strftime('%a, %d %b %Y %H:%m:%S GMT',
+					      time.gmtime(i[itemid]['date'])))
 			print '<link>%s</link>' % (uri)
 			print '<description>%s</description>' % (
 				cgi.escape(content))
