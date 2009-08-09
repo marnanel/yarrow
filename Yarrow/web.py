@@ -63,7 +63,10 @@ class yarrow:
 		self.title = 'Reverse Gossip'
 
 		# Name of the server.
-		self.server = ''
+		# If they set "single", this is the only server
+		# we allow access to.
+		self.server = config.value('general', 'single')
+		self.single = (self.server != None)
 
 		# What they want us to do.
 		self.verb = ''
@@ -172,9 +175,12 @@ class yarrow:
 			print '<input type="hidden" name="sequence" value="%x">' % (sequence)
 		print '<input type="submit" value=" Gossip "></form>'
 
+	def meta_field(self, field, default):
+		if self.user:
+			return self.user.state(y.server, field, None)
+		return default
+
 	def connect(self):
-		def meta_field(y, field):
-			return y.user.state(y.server, field, None)
 
 		if self.server!='':
 			try:
@@ -187,7 +193,7 @@ class yarrow:
 			self.server_details = server
 			self.connection = rgtp.fancy(server['host'],
 						     server['port'],
-						     self.log,
+						     self.meta_field('log', 0),
 						     server['encoding'])
 
                         if self.verb in ['newbie']:
@@ -302,13 +308,15 @@ ul.others { list-style-type: square; font-style: italic; }
 
 		print '</div><div class="menu">'
 		if self.server!='':
-						
-			print '<h1>%s</h1>' % (self.server)
+
+			if not self.single:
+				print '<h1>%s</h1>' % (self.server)
+
 			def serverlink(y, name, title, doc):
 
 				keyelement = ''
 
-				if y.accesskeys & 1:
+				if self.meta_field('accesskeys',0) & 1:
 					regexp = '_(.)'
 					keypress = re.findall(regexp, title)[0]
 					title = re.sub(regexp, '<u>'+keypress+'</u>', title)
@@ -468,20 +476,9 @@ ul.others { list-style-type: square; font-style: italic; }
 		return self.user and self.user.username!='Visitor'
 
 	def decide_tasks(self):
-		def harvest(self, key):
-			if self.form.has_key(key):
-				return self.form[key].value
-			else:
-				return ''
+		self.verb = ''
+		self.item = ''
 
-      		# Some things we can just pick up from arguments.
-
-		self.server = harvest(self, 'server')
-		self.verb = harvest(self, 'verb')
-		self.item = harvest(self, 'item')
-
-		# Some we can take from the path.
-	
 		if os.environ.has_key('PATH_INFO'):
 			path = os.environ['PATH_INFO']
 
@@ -513,7 +510,7 @@ ul.others { list-style-type: square; font-style: italic; }
 			for thing in path:
 				if thing=='':
 					continue
-				elif self.server=='':
+				elif not self.server:
 					self.server=thing
 				elif self.item=='' and len(thing)==8 and not self.verb:
 					self.item=thing
@@ -629,12 +626,14 @@ before the HTML starts printing."""
 		if servername=='':
 			return script_address
 		else:
-			if servername==None:
-				servername = self.server
-
-			result = '%s/%s' % (
-				script_address,
-				servername)
+			if self.single:
+				result = script_address
+			else:				
+				if servername==None:
+					servername = self.server
+				result = '%s/%s' % (
+					script_address,
+					servername)
 
 			if pagename:
 				result += '/' + pagename
