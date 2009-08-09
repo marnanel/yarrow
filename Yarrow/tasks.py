@@ -2042,9 +2042,7 @@ class dates_handler(handler_ancestor):
 			print http_status_from_exception(r)
 			y.title = str(r)
 
-
 	def body(self, y):
-
 		def posts(count):
 			if count==1:
 				return '1 post'
@@ -2100,8 +2098,8 @@ class dates_handler(handler_ancestor):
 				if month and int(month)==mm:
 					print '<b>%s</b>' % (name)
 				else:
-					print '<a href="%s/%02d">%s</a>' % (
-						year, mm, name)
+					print '<a href="%s">%s</a>' % (
+						y.uri("%s/%02d" % (year, mm)), name)
 		print '</p>'
 
 
