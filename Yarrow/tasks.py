@@ -386,7 +386,28 @@ class need_higher_privilege(privilege_error):
 
 ################################################################
 
-class read_handler(handler_ancestor):
+class tagreader_ancestor(handler_ancestor):
+	"Ancestor of all handlers which split metadata from text."
+	def split_tags(self, y, message):
+		metadata_in_use = False
+		tags = []
+
+		while message[0]=='':
+			message = message[1:]
+
+		while message[0].startswith('&'):
+			metadata_in_use = True
+			if message[0].startswith('&TAGS'):
+				tags.extend(message[0][6:].split(','))
+			message = message[1:]
+
+		tags = [t.strip() for t in tags]
+
+		return (metadata_in_use, tags, message)
+
+################################################################
+
+class read_handler(tagreader_ancestor):
 
 	def head(self, y):
 
@@ -448,30 +469,15 @@ class read_handler(handler_ancestor):
 		# Experimental: If the "metadata" flag is set, strip things
 		# which look like metadata.  (That is, lines at the start
 		# of the item preceded by ampersands.)
-		self.html = 0
-		metadata = config.server_details(y.server)['metadata']
-		if metadata and self.item and self.item[1]:
-			tags = []
-			message = self.item[1]['message']
-
-			while message[0]=='':
-				message = message[1:]
-
-			while message[0].startswith('&'):
-				self.html = 1
-			       	if message[0].startswith('&TAGS'):
-					tags.extend(message[0][6:].split(','))
-				message = message[1:]
+		if config.server_details(y.server)['metadata'] and self.item and self.item[1]:
+			(self.html, tags, self.item[1]['message']) = self.split_tags(y, self.item[1]['message'])
 
 			if tags:
-				print '<p><strong>Tags: </strong>'
-				tags = [t.strip() for t in tags]
+				print '<p><strong>Tags:</strong> '
 				tags.sort()
 				for tag in tags:
 					print '<a href="%s">%s</a>' % (y.uri('tag/'+tag), tag)
 				print '</p>'
-
-			self.item[1]['message'] = message
 
 		if self.item:
 			self.possibly_link(y,
@@ -2151,6 +2157,7 @@ class dates_handler(handler_ancestor):
 ################################################################
 
 class metadata_ancestor(handler_ancestor):
+	"Ancestor of all handlers which pull in the metadata index."
 	def get_metadata(self, y):
 		self.collated = cache.index(y.server, y.connection).items()
 		self.metadata = metadata.get(y.server, self.collated, y.connection)
