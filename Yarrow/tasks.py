@@ -2308,6 +2308,9 @@ class feed_handler(tagreader_ancestor, metadata_ancestor):
 
 		# FIXME: Sort "i" by started date
 
+		self.items.sort(key=lambda x: i[x]['started'])
+		self.items.reverse()
+
 		for itemid in self.items[:7]:
 			content = y.connection.item(itemid)
 			if y.server_details['metadata']:
