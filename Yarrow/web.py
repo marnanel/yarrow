@@ -103,6 +103,10 @@ class yarrow:
 		# The collated index
 		self.collater = None
 
+		# You can turn chrome off entirely if you like.
+		# (This is done automatically if the MIME type doesn't contain "html".)
+		self.no_chrome = False
+
 	################################################################
 
 	def try_again(self):
@@ -235,7 +239,7 @@ class yarrow:
 		mimetype = self.verb_handler.mimetype()
 		self.fly.set_header('Content-Type', mimetype)
 		if not 'html' in mimetype:
-			self.no_chrome = 1
+			self.no_chrome = True
 			return
 
 		# FIXME: Take this from the config file
@@ -296,7 +300,7 @@ ul.others { list-style-type: square; font-style: italic; }
 		print editbutton
 		if self.connection.base_access_level!=0:
 			print '<link rel="alternate" type="application/rss+xml" title="RSS" href="%s">' % (
-				self.uri('rss'))
+				self.uri('feed'))
 		for link in self.headlinks.keys():
 			print '<link rel="%s" title="%s" href="%s%s">' % (
 				link,

@@ -2244,12 +2244,56 @@ class slug_handler(metadata_ancestor):
 
 ################################################################
 
-class rss_handler(handler_ancestor):
+class feed_handler(handler_ancestor):
+	"An RSS feed."
+
+	# This is linked in the header if the server gives out
+	# at least read-only access by default, because it's
+	# probably not much use otherwise.  You can still get
+	# to it if you're logged in to a more restricted server,
+	# but it'll be little use to you because you can't
+	# show it to your RSS reader.
+
+	def title(self):
+		return None
+
 	def mimetype(self):
-		return 'text/plain'
+		return 'application/rss+xml'
 
 	def head(self, y):
-		pass
+		self.collater = cache.index(y.server, y.connection)
 
 	def body(self, y):
-		print 'What?'
+		server_name = os.environ['SERVER_NAME']
+		desc = y.server_details['description']
+
+		# FIXME: Escaping
+		# FIXME: Dates on items (optional)
+		# FIXME: Content of items!
+		# FIXME: Tags on items (optional)
+
+		print '<rss version="2.0">'
+		print '<channel>'
+		print '<title>%s</title>' % (desc)
+		print '<link>http://%s%s</link>' % (server_name, y.uri(''))
+		print '<description>%s</description>' % (desc)
+		print '<generator>Yarrow</generator>'
+
+		i = self.collater.items()
+
+		for itemid in self.collater.keys()[:7]:
+			print '<item>'
+			print '<title>%s</title>' % (i[itemid])['subject']
+			uri = 'http://%s%s' % (server_name, y.uri(itemid))
+			print '<guid isPermaLink="true">%s</guid>' % (uri)
+		        #<pubDate>Sat, 08 Aug 2009 19:11:42 GMT</pubDate>
+			print '<link>%s</link>' % (uri)
+			print '<description>CONTENT</description>'
+			print '<comments>%s</comments>' % (uri)
+			# categories
+			print '</item>'
+
+
+		print '</channel>'
+		print '</rss>'
+
