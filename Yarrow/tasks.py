@@ -2063,6 +2063,47 @@ class dates_handler(handler_ancestor):
 			print http_status_from_exception(r)
 			y.title = str(r)
 
+	def content(self, y):
+		# Eventually, all handlers will have a "content" method
+		# that returns the data used to create their body text.
+		# This will be used when we switch to templates.
+		years = {}
+		months = {}
+		calendar = {}
+
+		def consider(itemid, date):
+			(got_year, got_month, got_day) = time.localtime(date)[0:3]
+
+			years[got_year] = 1
+
+			if len(y.params)>1:
+				want_year = int(y.params[0])
+				want_month = int(y.params[1])
+				if got_year==want_year:
+					months[got_month] = 1
+					if got_month==want_month:
+						g = calendar.get(got_day,[])
+						g.append(itemid)
+						calendar[got_day] = g
+			elif len(y.params)>0:
+				# just the year
+				want_year = int(y.params[0])
+				if got_year==want_year:
+					months[got_month] = 1
+					calendar[got_month] = calendar.get(got_month,0)+1
+			else:
+				calendar[got_year] = calendar.get(got_year,0)+1
+
+		for itemid in y.collater.keys():
+			item = y.collater.items()[itemid]
+			consider(itemid, item['started'])
+
+		return {
+			'years': years,
+			'months': months,
+			'calendar': calendar,
+			}
+
 	def body(self, y):
 		def posts(count):
 			if count==1:
@@ -2070,36 +2111,10 @@ class dates_handler(handler_ancestor):
 			else:
 				return '%d posts' % (count)
 
-		self.years = {}
-		self.months = {}
-		self.calendar = {}
-
-		def consider(itemid, date):
-			(got_year, got_month, got_day) = time.localtime(date)[0:3]
-
-			self.years[got_year] = 1
-
-			if len(y.params)>1:
-				want_year = int(y.params[0])
-				want_month = int(y.params[1])
-				if got_year==want_year:
-					self.months[got_month] = 1
-					if got_month==want_month:
-						g = self.calendar.get(got_day,[])
-						g.append(itemid)
-						self.calendar[got_day] = g
-			elif len(y.params)>0:
-				# just the year
-				want_year = int(y.params[0])
-				if got_year==want_year:
-					self.months[got_month] = 1
-					self.calendar[got_month] = self.calendar.get(got_month,0)+1
-			else:
-				self.calendar[got_year] = self.calendar.get(got_year,0)+1
-
-		for itemid in y.collater.keys():
-			item = y.collater.items()[itemid]
-			consider(itemid, item['started'])
+		content = self.content(y)
+		self.years = content['years']
+		self.months = content['months']
+		self.calendar = content['calendar']
 
 		year = None
 		month = None
