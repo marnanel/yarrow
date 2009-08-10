@@ -419,13 +419,10 @@ class read_handler(tagreader_ancestor):
 			y.title = self.status['subject']
 			self.item = y.connection.item(y.item)
 
-			# FIXME: Factor out common code
-			if self.status['from']:
-				target = self.status['from']
-				y.headlinks['Prev'] = (target, target, '')
-			if self.status['to']:
-				target = self.status['to']
-				y.headlinks['Next'] = (target, target, '')
+			y.headlinks['Prev'] = ('Previous', y.item+'/go/previous', '')
+			y.headlinks['Next'] = ('Next', y.item+'/go/next', '')
+			y.headlinks['First'] = ('Oldest', y.item+'/go/first', '')
+			y.headlinks['Last'] = ('Newest', y.item+'/go/last', '')
 
 		except rgtp.RGTPException, r:
 			print http_status_from_exception(r)
@@ -597,7 +594,6 @@ class thread_handler(read_handler):
 
 			corrected = None
 
-			# FIXME: Eh? Isn't this back to front? Fix!
 			if self.collated[y.item].has_key('child'):
 
 				while self.collated[y.item].has_key('child'):
@@ -2228,11 +2224,12 @@ class tag_handler(metadata_ancestor):
 			if self.metadata.tags.has_key(parent):
 				related.append(parent)
 
-		if related:
-			print '<p><b>See also:</b>'
-			for t in related:
-				print '<a href="%s">%s</a>' % (y.uri('tag/'+t), t)
-			print '</p>'
+		print '<p><b>See also:</b>'
+		for t in related:
+			print '<a href="%s">%s</a>' % (y.uri('tag/'+t), t)
+		print '<a href="%s">all the tags</a>' % (
+			y.uri('tag'))
+		print '</p>'
 
 		print '<ul>'
 		i = self.collated
@@ -2241,8 +2238,8 @@ class tag_handler(metadata_ancestor):
 				time.strftime('%A %e %B %Y', time.localtime(i[itemid]['started'])),
 				y.uri(itemid),
 				cgi.escape(i[itemid]['subject']))
-		print '</ul><ul class="others"><li>See <a href="%s">all the tags in use</a>.</li></ul>' % (
-			y.uri('tag'))
+
+		print '</ul>'
 
 	def show_cloud(self, y):
 		print '<h1>Tags</h1>'
@@ -2371,3 +2368,57 @@ class feed_handler(tagreader_ancestor, metadata_ancestor):
 		print '</channel>'
 		print '</rss>'
 
+################################################################
+
+class go_handler(handler_ancestor):
+	def head(self, y):
+		index = cache.index(y.server, y.connection)
+
+		itemids = index.keys()
+		items = index.items()
+
+		if not itemids:
+			return
+
+		target = None
+
+		if y.item:
+			basis = y.item
+			while items[basis].has_key('child'):
+				basis = items[basis]['child']
+			position = itemids.index(basis)
+			current = items[y.item]
+		else:
+			position = None
+			current = None
+
+		if len(y.params):
+			command = y.params[0]
+		else:
+			command = None
+
+		if position!=None and command=='previous':
+			if current.has_key('child'):
+				target = current['child']
+			else:
+				target = itemids[position+1]
+		elif position!=None and command=='next':
+			if current.has_key('parent'):
+				target = current['parent']
+			else:
+				target = itemids[position-1]
+		elif command=='last':
+			target = itemids[0]
+		elif command=='first':
+			target = itemids[-1]
+
+		if target:
+			y.fly.set_header('Status', '301 Go')
+			y.fly.set_header('Location', y.uri(target))
+			y.fly.send_only_headers()
+
+	def body(self, y):
+		print 'You find nothing in that direction.'
+
+	def title(self):
+		return None
