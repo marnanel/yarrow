@@ -2218,7 +2218,23 @@ class tag_handler(metadata_ancestor):
 			print 'to see <a href="%s">all the tags in use</a>?' % (y.uri('tag'))
 			return
 
-		print '<h1>%s</h1><ul>' % (cgi.escape(tag.title()))
+		print '<h1>%s</h1>' % (cgi.escape(tag.title()))
+		
+		tagdot = tag+'.'
+		related = [t for t in self.metadata.tags if t.startswith(tagdot)]
+
+		if '.' in tag:
+			parent = tag[:tag.index('.')]
+			if self.metadata.tags.has_key(parent):
+				related.append(parent)
+
+		if related:
+			print '<p><b>See also:</b>'
+			for t in related:
+				print '<a href="%s">%s</a>' % (y.uri('tag/'+t), t)
+			print '</p>'
+
+		print '<ul>'
 		i = self.collated
 		for itemid in self.metadata.tags[tag]:
 			print '<li>%s: <a href="%s">%s</a></li>' % (
