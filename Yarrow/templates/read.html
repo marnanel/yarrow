@@ -1,33 +1,17 @@
 <!-- !
      Part of Yarrow.
      Add boilerplate here.
-
-     Have not removed chrome yet.
-
-     Still to do:
-     * Remove chrome
-     * Form
-     * Menu
-     * Hoplist
 -->
 <!DOCTYPE HTML>
 <html xmlns="http://www.w3.org/1999/xhtml"
-      xmlns:py="http://genshi.edgewall.org/">
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude">
+      <xi:include href="layout.html" />
 <head>
 <title>${content.title}</title>
-<meta http-equiv="Content-Type" content="${content.mimetype}" />
-<link rel="${link}"
-      href="${content.rel[link]}"
-      py:for="link in content.rel" />
-<link rel="Alternate"
-      type="${content.alternatemimetypes[title]}" title="${title}"
-      href="${content.alternates[title]}" py:for="title in content.alternates" />
 </head>
-<body><div class="content">
+<body>
 
-<p><b>To all users:</b> this is the new version of Yarrow, in public beta.  It has been tested for a few hours, but I would love to know (<a href="mailto:thomas@thurman.org.uk">thomas@thurman.org.uk</a>) whether this is working for you, and any bug reports you may have.  A copy of the old version is still running <a href="http://www.chiark.greenend.org.uk/ucgi/%7Etthurman/yarrow.cgi/groggs/browse">here</a> and <a href="http://groggs.extragalactic.info/cgi-bin/yarrow.cgi/groggs/browse">here</a>, in case this is unusable.</p>
-
-<h1>${content.title}</h1>
 <p><i>(Continued from <a href="http://rgtp.thurman.org.uk/gossip/groggs/R0832124#end">gbiff new article notifier</a>)</i></p>
 
 <div class="gossip" py:for="gossip in content.posts">
@@ -56,19 +40,4 @@ Message <textarea style="width: 99%;" cols="50" class="textbox" rows="10" name="
 <li py:for="hop in content.hoplist"><b><a href="${hop.url}" accesskey="${accesskey}">${hop.name}</a></b> (${hop.freshness})
 <?python accesskey += 1 ?></li>
 </ol>
-<ul class="others">
-<li py:for="other in content.otherlinks">${other[0]}<a href="${other[1]}">${other[2]}</a>${other[3]}</li>
-</ul>
-</div><div class="menu">
-<h1>groggs</h1>
-
-
-<a py:for="link in content.menu" href="${link[0]}" title="${link[1]}" accesskey="${link[2]}">
-<?python s=link[3].split(link[2], 1) ?>${s[0]}<b>${link[2]}</b>${s[1]}<br /><br /></a>
-<h1>yarrow</h1>
-<a href="https://launchpad.net/yarrow/+download">v1.3-beta</a><br />
-<a href="https://launchpad.net/yarrow/">about</a><br />
-<a href="http://validator.w3.org/check/referer">valid&nbsp;HTML</a><br />
-<a href="http://jigsaw.w3.org/css-validator/check/referer">valid&nbsp;CSS</a>
-<br /><br />
-</div></body></html>
+</body></html>
